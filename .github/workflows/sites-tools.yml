@@ -1,0 +1,18 @@
+name: Kiki ChatGPT Sites tools
+on:
+  push:
+    branches:
+      - feature/sites-mcp-integration
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  sites-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run Sites tools tests against SQLite
+        run: node --test tests/sites-tools.test.mjs
