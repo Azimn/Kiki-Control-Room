@@ -72,7 +72,7 @@ function loadRelayState_(props) {
 
 function saveRelayState_(props, state) {
   const raw = JSON.stringify(state);
-  if (raw.length > 75000) throw new Error("Relay state is too large: archive completed tasks.");
+  if (Utilities.newBlob(raw).getBytes().length > 8000) throw new Error("Relay state exceeds Apps Script property size: archive completed tasks or migrate to a database.");
   props.setProperty(KIKI_STATE_KEY, raw);
 }
 
