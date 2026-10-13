@@ -25,15 +25,17 @@ function tickKikiRelay() {
     const cfg = relayConfig_(props);
     const state = loadRelayState_(props);
     const now = new Date();
-    try {
-      pollTelegram_(cfg, state, now, props);
-    } catch (err) {
-      Logger.log("Telegram polling failed: " + String(err));
+    if (!cfg.calendarOnly) {
+      try {
+        pollTelegram_(cfg, state, now, props);
+      } catch (err) {
+        Logger.log("Telegram polling failed: " + String(err));
+      }
     }
     if (!state.paused) {
-      dailyCheckin_(cfg, state, now, props);
+      if (!cfg.calendarOnly) dailyCheckin_(cfg, state, now, props);
       calendarCheck_(cfg, state, now, props);
-      followupCheck_(cfg, state, now, props);
+      if (!cfg.calendarOnly) followupCheck_(cfg, state, now, props);
     }
     pruneReceipts_(state, now);
     saveRelayState_(props, state);
@@ -54,6 +56,7 @@ function relayConfig_(props) {
     writeId: get("WRITE_CALENDAR_ID"),
     timezone: timezone,
     showTitles: get("SHOW_CALENDAR_TITLES") === "true",
+    calendarOnly: get("KIKI_CALENDAR_ONLY") === "true",
     dailyHour: 9
   };
 }
