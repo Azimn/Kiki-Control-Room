@@ -1,23 +1,30 @@
 # Kiki Control Room
 
-A visual and voice-first personal assistant project, built around Kiki's existing personality and a persistent, proactive task loop. The goal is to initiate helpful contact, remember commitments, guide work sessions, and reduce the need to open yet another organizational tool.
+A low-resource, voice-first assistant project for Kiki. The operational goal is persistent, proactive follow-through: reach out, remember commitments, guide a single task, and continue even when the browser is closed.
 
-## Current prototype: free Telegram + calendar relay
+## Working prototypes
 
-The first backend candidate uses a dedicated Google Apps Script account as a scheduled runner, Telegram as the notification channel, and a Google calendar shared with that account. It can send morning check-ins and follow-ups, read upcoming calendar appointments, keep a small task queue, and create a calendar focus block only after explicit confirmation. It does **not** yet support conversational AI, voice messages, email triage, direct Outlook editing, or a connected browser UI.
+**Local-first runtime (recommended for an older, mostly-on PC):** `runtime/local/kiki_local.py` uses Python 3.10+, SQLite, a background scheduler, and optional private Telegram messaging. `web/index.html` is a responsive animated dashboard with task management, a focus view, and pause/snooze controls. A web manifest and offline app shell support PWA installation under an eligible secure origin. The server stays on loopback by default to prevent accidental network exposure.
 
-Code: `runtime/apps_script/Code.gs`. Private account setup: [Zero-fee runtime instructions](docs/FREE_RUNTIME_SETUP.md). Verification: `node --test tests/relay.test.cjs`.
+On Windows, use `start-kiki-windows.cmd`, then open **http://localhost:8765**. Instructions: [Local installation](docs/LOCAL_INSTALL.md).
 
-GitHub remains the development and static web-hosting home, **not** the always-on scheduler. Google Apps Script supplies scheduled execution without a paid hosting subscription. The runtime works without a billed LLM API. Google Drive can be used to store backups but is not required.
+**Cloud-free-calendar relay (optional companion or fallback):** `runtime/apps_script/Code.gs` can read Google calendars already shared with a dedicated Kiki Google account and send near-term appointment reminders via Telegram. Set the private Apps Script property `KIKI_CALENDAR_ONLY=true` when the local runtime owns Telegram commands. That prevents two competing update pollers or duplicate morning messages. Detailed setup: [Free runtime](docs/FREE_RUNTIME_SETUP.md).
 
-## Planned integration
+The Python runtime can work without the Google service, and the Google relay can work when the PC is offline. Neither one currently implements natural-language AI chat, spoken conversation, email processing, or local-calendar two-way editing.
 
-The original animated Kiki Control Room visual prototype is the interface design reference. A subsequent stage will connect that interface to the reminder/task service, add a voice interaction path, and allow the Kiki-Mind canonical history engine to remain independently owned and locally stored. Local model processing through Ollama, and eligible ChatGPT plan use through Sign in with ChatGPT, are alternative reasoning backends rather than architectural dependencies.
+## Architecture and boundaries
 
-Kiki-Mind is a separate repository: https://github.com/Azimn/Kiki-Mind
+The operational SQLite database lives in the Windows user profile, **not in the public GitHub repository or a synchronized drive**. GitHub stores source and tests, not private task data or bot credentials. Kiki's true authored history and developmental evidence belong in the separate [Kiki-Mind](https://github.com/Azimn/Kiki-Mind) engine. We may later connect the two via a carefully typed evidence interface without allowing assistant reminders to become fabricated autobiographical events.
 
-## Important limits
+Local Ollama or an eligible user-authorized ChatGPT integration can later provide reasoning on demand; neither should be required for a timer or reminder to fire.
 
-The relay is a **tested prototype**, not an activated bot. Activation requires the user's private Google Apps Script project, Telegram bot token, chat ID, and calendar sharing. Secrets and identifiable calendar contents must never be committed to this repository. The script currently retains only a small operational queue and does not constitute the canonical Kiki memory database.
+## Verification
 
-The software's scheduled execution is best-effort within provider quotas. The initial research question is whether Kiki reliably initiates the day's first task and follows up when that task has not yet been started.
+Local server tests: `python -m unittest discover -s tests -p "test_local_runtime.py" -v`.
+Apps Script simulated tests: `node --test tests/relay.test.cjs`.
+
+CI tests the local runtime on Windows and Linux, Python 3.10 and 3.12. These are prototype acceptance tests, **not a claim that any real Google or Telegram accounts are already connected**.
+
+## Intended next milestone
+
+Connect the local runtime to a private Telegram bot and the dedicated Kiki calendar. Confirm a check-in, a follow-up after no reply, a canceled reminder after acknowledgment, and calendar events appearing on the phone. Then integrate the voice interface, calendar edit approval path, and AI backend.
