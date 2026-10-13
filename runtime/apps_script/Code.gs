@@ -284,3 +284,33 @@ function pruneReceipts_(state, now) {
   state.tasks = state.tasks.filter(t => t.status === "open" ||
     (t.finished && new Date(t.finished).getTime() > now.getTime() - 14 * 86400000));
 }
+
+/**
+ * Setup helper. Message your new bot once, then run this function in Apps Script.
+ * Chat identifiers are written only to the private Apps Script execution log.
+ */
+function discoverKikiChatId() {
+  const token = PropertiesService.getScriptProperties().getProperty("TELEGRAM_BOT_TOKEN");
+  if (!token) throw new Error("Set TELEGRAM_BOT_TOKEN first.");
+  const cfg = {token: token};
+  const updates = telegram_(cfg, "getUpdates", {limit: 25, timeout: 0});
+  const ids = Array.from(new Set(updates
+    .filter(u => u.message && u.message.chat)
+    .map(u => String(u.message.chat.id))));
+  Logger.log(ids.length ? "Possible TELEGRAM_CHAT_ID values: " + ids.join(", ") :
+    "No chats found. Open your bot in Telegram, tap Start, and send a message.");
+}
+
+/** Explicit smoke test, never called from scheduled ticks. */
+function testKikiConnection() {
+  const cfg = relayConfig_(PropertiesService.getScriptProperties());
+  tell_(cfg, "Kiki relay connected. Next step: run installKikiRelay.");
+  cfg.ids.forEach(id => {
+    const cal = CalendarApp.getCalendarById(id);
+    Logger.log("Calendar " + id + ": " + (cal ? "accessible" : "NOT accessible"));
+  });
+  if (cfg.writeId) {
+    Logger.log("Write calendar " + cfg.writeId + ": " +
+      (CalendarApp.getCalendarById(cfg.writeId) ? "accessible (edit permission not yet verified)" : "NOT accessible"));
+  }
+}
