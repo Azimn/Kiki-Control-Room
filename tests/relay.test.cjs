@@ -163,3 +163,15 @@ test("Script Properties cap respects 9 KB maximum", () => {
   h.state.tasks.push({id:1, text:"x".repeat(10000), status:"open"});
   assert.throws(() => h.api.saveRelayState_(h.properties, h.state), /exceeds Apps Script/);
 });
+
+test("calendar-only mode never polls Telegram or sends duplicate morning check-ins", () => {
+  const h = harness();
+  h.props.KIKI_CALENDAR_ONLY = "true";
+  const c = h.api.relayConfig_(h.properties);
+  assert.equal(c.calendarOnly, true);
+  h.setUpdates([{update_id:1,message:{chat:{id:42},text:"/add Must not be processed"}}]);
+  h.api.tickKikiRelay();
+  assert.equal(h.api.loadRelayState_(h.properties).tasks.length, 0);
+  assert.equal(h.sent.filter(x => x.includes("Morning!")).length, 0);
+  assert.equal(h.api.loadRelayState_(h.properties).offset, 0);
+});
