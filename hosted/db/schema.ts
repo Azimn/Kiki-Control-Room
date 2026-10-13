@@ -1,0 +1,7 @@
+import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+const stamp = sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`;
+export const threads=sqliteTable('conversation_threads',{thread_id:text().primaryKey(),owner_id:text().notNull(),subject_id:text().notNull().default('kiki'),created_at:text().notNull().default(stamp)});
+export const events=sqliteTable('interaction_events',{seq:integer().primaryKey({autoIncrement:true}),event_id:text().notNull().unique(),thread_id:text().notNull().references(()=>threads.thread_id),turn_id:text().notNull(),event_kind:text().notNull(),source_channel:text().notNull(),source_native_id:text(),actor_id:text().notNull(),actor_kind:text().notNull(),idempotency_key:text().notNull(),content_json:text().notNull(),provenance_json:text().notNull(),parent_event_id:text(),recorded_at:text().notNull().default(stamp)},t=>[uniqueIndex('event_retry').on(t.source_channel,t.idempotency_key)]);
+export const turns=sqliteTable('conversation_turns',{turn_id:text().primaryKey(),thread_id:text().notNull().references(()=>threads.thread_id),user_event_id:text().notNull().unique().references(()=>events.event_id),assistant_event_id:text().unique().references(()=>events.event_id),state:text().notNull().default('prepared'),created_at:text().notNull().default(stamp)});
+export const tasks=sqliteTable('tasks',{id:text().primaryKey(),owner_id:text().notNull(),title:text().notNull(),status:text().notNull().default('open'),snoozed_until:text(),created_at:text().notNull().default(stamp)});
