@@ -129,6 +129,7 @@ test("daily nudge sends once, follows up and stops after reply", () => {
 test("pause prevents proactive daily and calendar checks", () => {
   const h = harness();
   h.api.interpret_("/pause", h.cfg, h.state, morning);
+  h.api.saveRelayState_(h.properties, h.state);
   h.api.tickKikiRelay();
   assert.equal(h.props.KIKI_RELAY_STATE_V1.includes('"paused":true'), true);
   assert.equal(h.sent.filter(x => x.includes("Morning!")).length, 0);
