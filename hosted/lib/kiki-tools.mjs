@@ -1,3 +1,4 @@
+import { KIKI_CHARACTER } from "./kiki-character.mjs";
 /**
  * Kiki Sites MCP tool logic, v0.1.
  *
@@ -76,6 +77,7 @@ export function createKikiToolService(db, channel = "chatgpt") {
     ).bind(owner).first();
     return {
       subject_id: "kiki",
+      character: KIKI_CHARACTER,
       latest_events: results.results.map(e => ({
         seq: e.seq, thread_id: e.thread_id, turn_id: e.turn_id,
         kind: e.event_kind, source: e.source_channel,
@@ -129,6 +131,7 @@ export function createKikiToolService(db, channel = "chatgpt") {
       return {
         thread_id: existing.thread_id, turn_id: existing.turn_id,
         user_event_id: existing.event_id, status: "prepared",
+        character: KIKI_CHARACTER,
         reused: true
       };
     }
@@ -169,6 +172,7 @@ export function createKikiToolService(db, channel = "chatgpt") {
     return {
       thread_id: receipt.thread_id, turn_id: receipt.turn_id,
       user_event_id: receipt.event_id, status: "prepared",
+        character: KIKI_CHARACTER,
       reused: receipt.event_id !== event
     };
   }
