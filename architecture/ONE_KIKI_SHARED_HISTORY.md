@@ -39,6 +39,12 @@ Native ChatGPT can serve as the inference renderer **during conversations invoki
 
 Voice access through a Kiki website and browser speech APIs is separate from native ChatGPT Voice. Custom MCP availability during a native Live Voice session must be tested rather than assumed.
 
+### Coordinating ChatGPT's other tools
+
+When available in the user's ChatGPT session, ChatGPT may combine Kiki's MCP tools with independently authorized calendar, email, GitHub, or other app tools. Kiki's MCP server must not impersonate those connectors or assume it can read data that has not been explicitly provided through the host. For example, ChatGPT can obtain a permitted email from the mail connector, ask Kiki for relevant communication context, draft the reply, and submit the *proposed* draft or action outcome as an attributed Kiki event. The exact content, source, and user approval status must be preserved. Never mark an external email as sent merely because ChatGPT drafted it.
+
+This is a key reason to keep the ChatGPT interface first-class: it provides a capable user-invoked reasoning environment and access to separately approved tools, while Kiki's own durable backend provides continuity before and after the session.
+
 ## Multi-interface conversation continuity
 
 Telegram receives a private message, authenticates the configured chat, records it through the shared backend, and retrieves context for the reply. The web interface reads the same conversation log and task projections. The ChatGPT plugin reads the same authenticated context and adds explicitly routed ChatGPT exchanges. Kiki on the old computer streams newly committed events by sequence number and submits evidence or pending operations through the cloud service.
