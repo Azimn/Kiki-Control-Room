@@ -10,7 +10,7 @@ On Windows, use `start-kiki-windows.cmd`, then open **http://localhost:8765**. I
 
 **Cloud-free-calendar relay (optional companion or fallback):** `runtime/apps_script/Code.gs` can read Google calendars already shared with a dedicated Kiki Google account and send near-term appointment reminders via Telegram. Set the private Apps Script property `KIKI_CALENDAR_ONLY=true` when the local runtime owns Telegram commands. That prevents two competing update pollers or duplicate morning messages. Detailed setup: [Free runtime](docs/FREE_RUNTIME_SETUP.md).
 
-The Python runtime can work without the Google service, and the Google relay can work when the PC is offline. Neither one currently implements natural-language AI chat, spoken conversation, email processing, or local-calendar two-way editing.
+The Python runtime includes optional local Jan conversation, outbound Site task/history synchronization, and signed calendar booking. Relevant older shared conversations can be retrieved into Jan's prompt after the hosted archive export is deployed. Email queue and local draft persistence are implemented; browser mailbox access, voice input, and email sending are not. See [current status and next steps](docs/ROADMAP.md).
 
 ## Architecture and boundaries
 
@@ -20,6 +20,8 @@ Local Ollama or an eligible user-authorized ChatGPT integration can later provid
 
 ## Verification
 
+Local Telegram calendar booking is implemented through the optional signed Apps Script bridge; see [Calendar booking setup](docs/CALENDAR_BOOKING.md). `/book` schedules directly on an explicit user command, while `/block` offers an optional preview. Deployment, calendar-writing authorization, and live acceptance are required before enabling it. The existing local server remains loopback-only.
+
 Local server tests: `python -m unittest discover -s tests -p "test_local_runtime.py" -v`.
 Apps Script simulated tests: `node --test tests/relay.test.cjs`.
 
@@ -27,4 +29,4 @@ CI tests the local runtime on Windows and Linux, Python 3.10 and 3.12. These are
 
 ## Intended next milestone
 
-Connect the local runtime to a private Telegram bot and the dedicated Kiki calendar. Confirm a check-in, a follow-up after no reply, a canceled reminder after acknowledgment, and calendar events appearing on the phone. Then integrate the voice interface, calendar edit approval path, and AI backend.
+Deploy and verify shared-history retrieval, then integrate a restricted browser email adapter: read, draft, and review together. Automatic email sending remains disabled. See [roadmap](docs/ROADMAP.md), [email design](docs/EMAIL_ASSISTANT.md), and [shared context](docs/SHARED_CONTEXT.md).
