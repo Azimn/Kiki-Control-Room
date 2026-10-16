@@ -30,6 +30,48 @@ DEFAULTS = dict(ollama_url='http://127.0.0.1:11434', model='', vision_model='',
                 max_unanswered=2, daily_limit=6, airi_url='ws://localhost:6121/ws', airi_token='')
 
 
+def suggest_proactive_step(context, clock):
+    """Use an actual local-PC task projection, never inferred mail contents.
+
+    Return a privacy-safe category and one starting action. In particular,
+    never place names or raw university task titles in a spoken prompt.
+    """
+    tasks=context.get('tasks',[])
+    if not isinstance(tasks,list):
+        return None
+    def eligible(item):
+        if not isinstance(item,dict) or item.get('status')!='open':
+            return False
+        until=item.get('snoozed_until')
+        if until:
+            try:
+                if datetime.fromisoformat(until.replace('Z','+00:00')).timestamp()>clock:
+                    return False
+            except (ValueError,TypeError,OverflowError):
+                return False
+        return isinstance(item.get('title'),str) and bool(item['title'].strip())
+    choices=[t for t in tasks if eligible(t)]
+    if not choices:
+        return None
+    choices.sort(key=lambda t:(str(t.get('created_at') or ''),str(t.get('id') or '')))
+    title=choices[0]['title']
+    if re.search(r'\b(email|inbox|reply|outlook|mail)\b',title,re.I):
+        kind,step='email-related task','open the relevant message in your approved work account'
+    elif re.search(r'\b(meeting|calendar|schedule|appointment)\b',title,re.I):
+        kind,step='scheduling task','open the calendar request and identify one decision'
+    elif re.search(r'\b(course|canvas|class|lecture|grade|student|faculty)\b',title,re.I):
+        kind,step='university task','open the relevant university system and locate one item'
+    else:
+        kind,step='saved task','open the relevant page or materials and identify one action'
+    at=context.get('task_snapshot_at')
+    try:
+        age=clock-datetime.fromisoformat(str(at).replace('Z','+00:00')).timestamp()
+        freshness='recent' if 0<=age<=300 else 'previously synchronized'
+    except (TypeError,ValueError,OverflowError):
+        freshness='previously synchronized'
+    return {'category':kind,'next_action':step,'freshness':freshness}
+
+
 def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
 
@@ -353,7 +395,16 @@ class Bridge:
         if not self.can_initiate():return False
         context=self.refresh_context();session=context.get('session',{})
         if session.get('status')=='paused':return False
-        reason=('Invite Jay to resume '+session.get('objective','')+'. Next action: '+session.get('next_action','')) if session.get('status')=='active' else 'Offer Jay a friendly, optional check-in or company. Do not manufacture a task or urgency.'
+        if session.get('status')=='active':
+            reason=('Invite Jay to resume the existing work session. Next action: '+session.get('next_action','')+
+                    '. Offer one brief optional step. Do not claim work was done.')
+        else:
+            suggestion=suggest_proactive_step(context,self.clock())
+            reason=(('Offer to start one '+suggestion['category']+' from a '+suggestion['freshness']+
+                    ' PC task snapshot. Suggest exactly this first action: '+suggestion['next_action']+
+                    '. Do not speak raw task titles, names, student data, inferred deadlines or urgency. '+
+                    'Do not claim to have opened a message or completed anything. Respect a refusal.') if suggestion
+                    else 'Offer Jay a friendly, optional check-in or company. Do not manufacture a task or urgency.')
         entry=self.new_initiative(reason)
         if not self.gateway.send_initiative(entry):return False
         self.last_output=self.clock();self.unanswered+=1;self.store.set('unanswered',self.unanswered)
