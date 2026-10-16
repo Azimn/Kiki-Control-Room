@@ -27,7 +27,7 @@ export async function updateWorkSession(db,ctx,payload,taskTool) {
   const a=payload||{};
   check(typeof a.operation_id==="string"&&ID.test(a.operation_id),"Stable operation ID required.");
   check(Number.isSafeInteger(a.revision)&&a.revision>=0,"Session revision required.");
-  check(["begin","pause","defer","resume","step","next","finish"].includes(a.command),"Unsupported session action.");
+  check(["begin","defer_offer","pause","defer","resume","step","next","finish"].includes(a.command),"Unsupported session action.");
   check(typeof a.detail==="undefined" || (typeof a.detail==="string"&&a.detail.length<=1000),"Invalid next action.");
   await setup(db);
   const prior=await stmt(db,"SELECT result_json FROM companion_session_ops WHERE owner_id=? AND operation_id=?",owner,a.operation_id).first();
@@ -40,7 +40,7 @@ export async function updateWorkSession(db,ctx,payload,taskTool) {
   let current=await read(db,owner);
   check(current.revision===a.revision,"Session changed on another device. Refresh and try again.");
   let offer=null;
-  if(a.command==="begin") {
+  if(a.command==="begin"||a.command==="defer_offer") {
     const tasks=await taskTool.getTasks(ctx);
     offer=suggestWork(tasks.hosted_tasks,tasks.pc_snapshot);
     check(offer && String(offer.task_id)===String(a.task_id),"Suggested task changed. Refresh before starting.");
