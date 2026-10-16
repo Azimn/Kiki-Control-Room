@@ -234,7 +234,98 @@ export function createKikiToolService(db, channel = "chatgpt") {
     };
   }
 
-  return { getBrief, getHistory, prepareTurn, commitTurn };
+
+  // Operational projections are owner-scoped and read-only. An event receipt
+  // proves historical activity, not an adapter's present connectivity.
+  async function hasTable(name) {
+    const row = await db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
+    ).bind(name).first();
+    return Boolean(row);
+  }
+
+  async function getTasks(ctx, { limit = 100 } = {}) {
+    const owner = requireOwner(ctx);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error("Task limit must be between 1 and 100.");
+    }
+    const hosted = await db.prepare(
+      "SELECT id,title,status,snoozed_until,created_at FROM tasks " +
+      "WHERE owner_id=? ORDER BY created_at DESC LIMIT ?"
+    ).bind(owner, limit).all();
+    let pc = null;
+    if (await hasTable("desktop_sync")) {
+      const row = await db.prepare(
+        "SELECT snapshot_json,last_seen FROM desktop_sync WHERE owner_id=?"
+      ).bind(owner).first();
+      if (row) {
+        const snapshot = JSON.parse(row.snapshot_json);
+        pc = { tasks: Array.isArray(snapshot.tasks) ? snapshot.tasks.slice(0, limit) : [],
+          observed_at: row.last_seen, source: "local_pc_sqlite_replica",
+          live_connection_verified: false };
+      }
+    }
+    return {
+      hosted_tasks: hosted.results, pc_snapshot: pc,
+      hosted_authority: "Site-owned records only",
+      pc_authority: "Local SQLite; the last replicated snapshot is not a live connection",
+      caveat: "Do not merge, execute, or complete PC tasks using hosted task IDs without an acknowledged sync operation."
+    };
+  }
+
+  async function getWorkSession(ctx) {
+    const owner = requireOwner(ctx);
+    if (!(await hasTable("companion_sessions"))) {
+      return { available: false, status: "unavailable",
+        reason: "Shared work-session persistence is not installed in this source revision." };
+    }
+    const row = await db.prepare(
+      "SELECT revision,content_json,updated_at FROM companion_sessions WHERE owner_id=?"
+    ).bind(owner).first();
+    if (!row) {
+      return { available: true, status: "idle", revision: 0,
+        objective: "", next_action: "", last_outcome: "", updated_at: null };
+    }
+    return { available: true, ...JSON.parse(row.content_json),
+      revision: row.revision, updated_at: row.updated_at };
+  }
+
+  async function getChannelStatus(ctx) {
+    const owner = requireOwner(ctx);
+    const receipts = await db.prepare(
+      "SELECT e.source_channel AS source,MAX(e.recorded_at) AS last_event_at," +
+      "COUNT(*) AS receipt_count FROM interaction_events e " +
+      "JOIN conversation_threads t ON t.thread_id=e.thread_id " +
+      "WHERE t.owner_id=? GROUP BY e.source_channel ORDER BY last_event_at DESC"
+    ).bind(owner).all();
+    const channels = receipts.results.map(r => ({
+      source: r.source, last_event_at: r.last_event_at,
+      receipt_count: r.receipt_count, live_connected: null,
+      evidence: "historical_event_only"
+    }));
+    if (await hasTable("desktop_sync")) {
+      const sync = await db.prepare(
+        "SELECT last_seen FROM desktop_sync WHERE owner_id=?"
+      ).bind(owner).first();
+      if (sync) channels.push({ source: "pc_sync", last_event_at: sync.last_seen,
+        receipt_count: null, live_connected: null, evidence: "last_successful_sync_only" });
+    }
+    if (await hasTable("companion_devices")) {
+      const devices = await db.prepare(
+        "SELECT id,label,revoked,last_seen FROM companion_devices WHERE owner_id=?"
+      ).bind(owner).all();
+      for (const device of devices.results) channels.push({
+        source: "airi_device", device_id: device.id, label: device.label,
+        last_event_at: device.last_seen, revoked: Boolean(device.revoked),
+        live_connected: null, evidence: "last_authenticated_contact_only"
+      });
+    }
+    return { hosted_ledger_available: true, channels,
+      live_connection_verification: "not_available",
+      note: "Last contact and historical receipts must not be displayed as a current online indicator." };
+  }
+
+  return { getBrief, getHistory, prepareTurn, commitTurn, getTasks, getWorkSession, getChannelStatus };
 }
 
 export const KIKI_SITE_TOOL_DEFINITIONS = Object.freeze([
@@ -258,6 +349,21 @@ export const KIKI_SITE_TOOL_DEFINITIONS = Object.freeze([
       text: { type: "string", minLength: 1, maxLength: 6000 },
       retry_key: { type: "string" }, thread_id: { type: "string" }
     }, required: ["text", "retry_key"], additionalProperties: false }
+  },
+  {
+    name: "kiki_get_tasks", readonly: true,
+    description: "Read owner-scoped hosted task records and the last synced PC task snapshot, explicitly identifying their separate authorities and freshness.",
+    input: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 100 } }, additionalProperties: false }
+  },
+  {
+    name: "kiki_get_work_session", readonly: true,
+    description: "Read the authoritative shared work-session projection if installed, including objective, next action, revision and stopping point.",
+    input: { type: "object", properties: {}, additionalProperties: false }
+  },
+  {
+    name: "kiki_get_channel_status", readonly: true,
+    description: "Read source-attributed last-seen evidence without implying that any client is presently connected.",
+    input: { type: "object", properties: {}, additionalProperties: false }
   },
   {
     name: "kiki_commit_turn", readonly: false,
