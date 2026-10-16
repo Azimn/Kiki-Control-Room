@@ -13,7 +13,7 @@ export async function POST(r:Request){
  if(req.method!=='tools/call')return Response.json({jsonrpc:'2.0',id:req.id,error:{code:-32601,message:'Method not found'}});
  const def=KIKI_SITE_TOOL_DEFINITIONS.find((d:any)=>d.name===req.params?.name);const a=req.params?.arguments||{};
  try{if(!def||!a||Array.isArray(a)||typeof a!=='object'||Object.keys(a).some(k=>!Object.keys(def.input.properties).includes(k)))throw Error('Invalid tool arguments.');
- const methods:any={kiki_get_brief:'getBrief',kiki_get_history:'getHistory',kiki_prepare_turn:'prepareTurn',kiki_commit_turn:'commitTurn'};
+ const methods:any={kiki_get_brief:'getBrief',kiki_get_history:'getHistory',kiki_prepare_turn:'prepareTurn',kiki_commit_turn:'commitTurn',kiki_get_tasks:'getTasks',kiki_get_work_session:'getWorkSession',kiki_get_channel_status:'getChannelStatus'};
  const result=await (service() as any)[methods[def.name]]({ownerId:owner},a);return answer({content:[{type:'text',text:JSON.stringify(result)}]});
  }catch(e){return answer({isError:true,content:[{type:'text',text:e instanceof Error?e.message:'Tool failed.'}]})}
 }
