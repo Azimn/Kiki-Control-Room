@@ -6,7 +6,7 @@ import {readExecutiveOffer,updateWorkSession} from "../lib/work-session.mjs";
 
 class D1 {
   constructor(){this.db=new DatabaseSync(":memory:")}
-  prepare(sql){const db=this.db;return {bind(...args){return {
+  prepare(sql){const db=this.db;return {async run(){return {meta:db.prepare(sql).run()}},bind(...args){return {
     async first(){return db.prepare(sql).get(...args)||null},
     async all(){return {results:db.prepare(sql).all(...args)}},
     async run(){return {meta:db.prepare(sql).run(...args)}}
