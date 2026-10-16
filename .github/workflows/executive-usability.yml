@@ -15,3 +15,5 @@ jobs:
           node-version: '22'
       - name: Executive workflow regression
         run: node --test hosted/tests/executive-usability.test.mjs hosted/tests/sites-tools.test.mjs
+      - name: TypeScript and JSX parse check
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund typescript@5.9.3 && node hosted/tests/tsx-syntax.cjs
