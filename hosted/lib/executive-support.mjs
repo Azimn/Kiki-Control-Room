@@ -72,13 +72,14 @@ export function applySessionCommand(current, command, offer = null, detail = "")
   if (!SESSION_STATES.includes(state)) throw Error("Unsupported work-session state.");
   const output = {objective:old.objective || "", next_action:old.next_action || "",
     last_outcome:old.last_outcome || "", status:state};
-  if (command === "begin") {
+  if (command === "begin" || command === "defer_offer") {
     if (state === "active" || state === "paused") throw Error("Resume or finish the existing session before selecting a new task.");
     if (!offer || !offer.title || !offer.next_action) throw Error("No eligible task to offer.");
     output.objective = offer.title;
     output.next_action = offer.next_action;
     output.last_outcome = "Session started. No task actions have been verified.";
-    output.status = "active";
+    output.status = command === "defer_offer" ? "paused" : "active";
+    if (command === "defer_offer") output.last_outcome = "Offer deferred. Kiki will retain this next action without repeat prompts.";
   } else if (command === "pause" || command === "defer") {
     if (state !== "active") throw Error("Only an active session can be paused.");
     output.status = "paused";
