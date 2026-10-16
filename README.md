@@ -2,6 +2,12 @@
 
 A low-resource, voice-first assistant project for Kiki. The operational goal is persistent, proactive follow-through: reach out, remember commitments, guide a single task, and continue even when the browser is closed.
 
+## Companion-first product direction
+
+Kiki's primary purpose is to be a familiar, proactive executive-function companion: start a work session, stay with the owner while working, remember interruptions, and follow through. A friendly voice, animated presence, and genuine co-working are central features; automation is optional. The user can enjoy improving Kiki while using her for real administrative and personal tasks.
+
+The next design milestone is a privately installed Chrome companion panel that reuses the existing Windows runtime and shared continuity. Read the [product vision](docs/KIKI_COMPANION_VISION.md), [browser companion v0.1 plan](docs/BROWSER_COMPANION_V01.md), and [work-session contract](docs/WORK_SESSIONS.md). Muse may later handle delegated work, but Kiki remains the familiar workday collaborator.
+
 ## Working prototypes
 
 **Local-first runtime (recommended for an older, mostly-on PC):** `runtime/local/kiki_local.py` uses Python 3.10+, SQLite, a background scheduler, and optional private Telegram messaging. `web/index.html` is a responsive animated dashboard with task management, a focus view, and pause/snooze controls. A web manifest and offline app shell support PWA installation under an eligible secure origin. The server stays on loopback by default to prevent accidental network exposure.
@@ -29,4 +35,4 @@ CI tests the local runtime on Windows and Linux, Python 3.10 and 3.12. These are
 
 ## Intended next milestone
 
-Deploy and verify shared-history retrieval, then integrate a restricted browser email adapter: read, draft, and review together. Automatic email sending remains disabled. See [roadmap](docs/ROADMAP.md), [email design](docs/EMAIL_ASSISTANT.md), and [shared context](docs/SHARED_CONTEXT.md).
+Build Kiki Browser Companion v0.1 as a private, locally installed Chrome side panel, backed by a durable, Kiki-initiated co-working session. Keep the existing local runtime, dashboard, and shared state as authorities. Prove that Kiki can greet, guide one real task, pause, and later resume it without requiring the owner to reconstruct the plan. Develop voice and browser-assisted email incrementally; sending remains disabled in the current prototype. See the [roadmap](docs/ROADMAP.md), [browser plan](docs/BROWSER_COMPANION_V01.md), [work-session contract](docs/WORK_SESSIONS.md), [email design](docs/EMAIL_ASSISTANT.md), and [shared context](docs/SHARED_CONTEXT.md).
