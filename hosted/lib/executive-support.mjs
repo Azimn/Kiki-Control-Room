@@ -32,8 +32,8 @@ const PLAYBOOKS = Object.freeze({
 });
 export function playbookFor(title) {
   if (/\b(email|mailbox|inbox|reply|respond|outlook|message)\b/i.test(title)) return "email";
-  if (/\b(canvas|grade|grading|class|course|student|syllabus|university|faculty|lecture)\b/i.test(title)) return "course";
   if (/\b(meeting|calendar|appointment|schedule|rsvp)\b/i.test(title)) return "meeting";
+  if (/\b(canvas|grade|grading|class|course|student|syllabus|university|faculty|lecture)\b/i.test(title)) return "course";
   return "general";
 }
 export function nextAction(title, previous = null) {
@@ -90,10 +90,15 @@ export function applySessionCommand(current, command, offer = null, detail = "")
   } else if (command === "step") {
     if (state !== "active") throw Error("Resume the session before recording progress.");
     const next = nextAction(output.objective, output.next_action);
-    if (!next) throw Error("No further suggested step. Record the outcome or finish the session.");
-    output.last_outcome = "User reported completing: " + output.next_action +
-      " External outcome not independently verified.";
-    output.next_action = next;
+    if (!next) {
+      output.last_outcome = "User reported completing the final suggested step; no external result was verified.";
+      output.next_action = "Verify the outcome in its actual system, or keep this step for next time.";
+      output.status = "paused";
+    } else {
+      output.last_outcome = "User reported completing: " + output.next_action +
+        " External outcome not independently verified.";
+      output.next_action = next;
+    }
   } else if (command === "next") {
     if (state !== "active" && state !== "paused") throw Error("Start a session first.");
     if (typeof detail !== "string" || !detail.trim() || detail.length > 1000) throw Error("Next action must contain 1 to 1000 characters.");
