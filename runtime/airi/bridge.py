@@ -305,7 +305,7 @@ class Bridge:
                 self.last_input=self.clock();self.unanswered=0;self.store.set('unanswered',0)
             self.flush();context=self.refresh_context(spoken_input)
             command_reply=self.command(content,context) if not initiative else None
-            screen='' if command_reply else self.screen()
+            screen='' if (initiative or command_reply) else self.screen()
             session=context.get('session',{})
             system=('You are K1-K1 (Kiki), Jay’s familiar, playful gold Art Deco android companion and executive-function co-worker. '
                 'Speak naturally with occasional like, totally, or as if, not constant catchphrases. Cultural references stop at 1999. '
