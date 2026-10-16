@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101126">
+<meta name="description" content="Kiki Control Room: one thing at a time, together.">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/kiki-icon.svg" type="image/svg+xml">
+<title>Kiki Control Room</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+:root {color-scheme:dark;--bg:#101126;--panel:#1d2040;--panel2:#25284c;--line:#44466a;--text:#f4f2ff;--muted:#a4a6c8;--pink:#ff7ab8;--mint:#78ebcf;--purple:#a998ff;--gold:#f1d18f;}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at top right,#302153 0,transparent 42%),linear-gradient(#13142b,#0d1020);color:var(--text);font:15px/1.5 'DM Sans',system-ui,sans-serif;min-height:100vh}
+button,input{font:inherit}
+button{cursor:pointer;border:0;color:var(--text)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+header{max-width:1200px;margin:auto;display:flex;align-items:center;justify-content:space-between;padding:26px 24px 20px;gap:16px}
+.brand{font:700 24px 'Space Grotesk',sans-serif;letter-spacing:-.8px}
+.brand span{color:var(--pink)}
+.chip{font-size:12px;border:1px solid #505273;border-radius:99px;color:var(--muted);padding:6px 12px}
+main{max-width:1200px;margin:0 auto;padding:0 24px 50px;display:grid;grid-template-columns:minmax(280px,.92fr) minmax(380px,1.08fr);gap:22px}
+.panel{background:linear-gradient(145deg,rgba(40,42,78,.97),rgba(24,27,51,.96));border:1px solid #464363;border-radius:25px;box-shadow:0 22px 58px #03051044}
+.hero{padding:28px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 47% 30%,#704e9636,transparent 50%);pointer-events:none}
+.eyebrow{font:700 11px 'Space Grotesk';letter-spacing:2.1px;text-transform:uppercase;color:var(--mint);margin:0 0 6px}
+h1,h2,p{margin-top:0}
+h1{font:700 clamp(30px,3.6vw,46px)/1.1 'Space Grotesk';letter-spacing:-1.5px;margin-bottom:8px}
+h2{font:700 20px 'Space Grotesk';letter-spacing:-.6px}
+.sub{color:var(--muted);max-width:45ch}
+.portrait{height:305px;position:relative;display:grid;place-items:center}
+.halo{position:absolute;width:240px;height:240px;left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid #9f8ae444;border-radius:50%;box-shadow:0 0 0 26px #8674d108,0 0 0 54px #8674d108}
+.portrait svg{height:284px;max-width:100%;position:relative;filter:drop-shadow(0 16px 20px #0005);animation:float 5s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(3px)}50%{transform:translateY(-8px)}}
+@media (prefers-reduced-motion:reduce){.portrait svg{animation:none}}
+.avatar-note{font-size:12px;color:var(--muted);text-align:center;position:relative}
+.speech{padding:20px;border:1px solid #6b5c8b;background:#322d58;border-radius:18px;color:#f5e8ff;position:relative}
+.speech:before{content:"";position:absolute;top:-7px;left:24px;width:12px;height:12px;background:#322d58;border-left:1px solid #6b5c8b;border-top:1px solid #6b5c8b;transform:rotate(45deg)}
+.speech strong{display:block;color:var(--pink);font:700 11px 'Space Grotesk';letter-spacing:1.8px;margin-bottom:6px}
+.detail{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px;color:var(--muted);font-size:12px}
+.dot{width:8px;height:8px;border-radius:100%;background:var(--mint);display:inline-block;box-shadow:0 0 12px var(--mint)}
+.stack{display:flex;flex-direction:column;gap:20px}
+.work{padding:28px}
+.split{display:flex;align-items:center;justify-content:space-between;gap:15px}
+.mini{font-size:12px;color:var(--muted)}
+.queue{margin:18px 0 22px;display:flex;flex-direction:column;gap:9px}
+.task{display:flex;align-items:center;gap:12px;border:1px solid #494a71;background:#252748;border-radius:14px;padding:12px}
+.task .title{flex:1;overflow-wrap:anywhere}
+.task small{font-size:12px;color:var(--muted)}
+.task button{background:#344c58;color:#9af5d8;border:1px solid #51867d;border-radius:10px;padding:8px 12px;white-space:nowrap}
+.task.done{opacity:.58}
+.empty{border:1px dashed #666483;border-radius:16px;padding:28px;color:var(--muted);text-align:center}
+.add{display:flex;gap:8px}
+.add input{width:100%;flex:1;min-width:0;border-radius:12px;border:1px solid #5d5c7d;padding:13px 14px;background:#15172f;color:var(--text)}
+.primary{background:var(--mint);color:#092b33;border-radius:12px;padding:12px 17px;font-weight:700}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.secondary{background:#36375a;border:1px solid #656386;border-radius:12px;padding:10px 13px}
+.label{font-size:11px;font-weight:700;letter-spacing:1.7px;text-transform:uppercase;color:var(--purple)}
+.focus{margin-top:20px;background:linear-gradient(135deg,#37335c,#2a2b50);padding:20px;border:1px solid #625b89;border-radius:15px}
+.focus .large{font:600 22px/1.3 'Space Grotesk';margin:6px 0 10px}
+.status{padding:23px 28px}
+.info{color:var(--muted);margin-bottom:17px}
+.notice{border:1px solid #6b5781;border-radius:12px;padding:12px 14px;background:#352847;color:#ebd6e7;font-size:13px}
+footer{max-width:1200px;margin:auto;color:var(--muted);font-size:12px;padding:0 24px 26px}
+@media(max-width:850px){main{grid-template-columns:1fr}.portrait{height:230px}.portrait svg{height:220px}.hero,.work,.status{padding:22px}header{padding:20px 18px}main{padding:0 16px 32px;gap:16px}footer{padding:0 16px 24px}}
+</style>
+</head>
+<body>
+<header><div class="brand">KIKI<span> / </span>CONTROL ROOM</div><div class="chip" id="online">Connecting to local Kiki…</div></header>
+<main>
+<section class="panel hero" aria-label="Kiki avatar and briefing">
+<p class="eyebrow">YOUR CO-PILOT / ON FREQUENCY</p>
+<h1>One thing<br>at a time.</h1>
+<p class="sub">Less inbox archaeology. More getting things done together.</p>
+<div class="portrait" aria-hidden="true"><div class="halo"></div>
+<svg viewBox="0 0 260 325" xmlns="http://www.w3.org/2000/svg">
+ <ellipse cx="129" cy="291" rx="92" ry="18" fill="#171327" opacity=".7"/>
+ <path d="M46 306Q40 232 86 214H173Q216 231 215 306Z" fill="#ff7abb" stroke="#442747" stroke-width="5"/>
+ <path d="M80 270L67 308M180 270L195 308" stroke="#7e3d75" stroke-width="5"/>
+ <path d="M101 225L130 266L159 225" fill="#fff0cc" stroke="#513d56" stroke-width="5"/>
+ <rect x="113" y="192" width="33" height="42" rx="12" fill="#d89182"/>
+ <ellipse cx="130" cy="131" rx="73" ry="91" fill="#312846"/>
+ <path d="M62 153Q52 47 124 46Q204 35 199 151L187 202L75 201Z" fill="#342443"/>
+ <ellipse cx="130" cy="136" rx="59" ry="78" fill="#eab1a0" stroke="#8f625f" stroke-width="3"/>
+ <path d="M69 104Q57 33 123 35Q186 25 201 95Q171 67 154 76Q112 104 69 104Z" fill="#30213c"/>
+ <path d="M75 78Q86 48 117 40" stroke="#986ba3" stroke-width="8" fill="none" stroke-linecap="round"/>
+ <path d="M84 106Q103 97 117 104M143 104Q158 98 176 106" stroke="#4b3048" stroke-width="5" fill="none" stroke-linecap="round"/>
+ <ellipse cx="103" cy="124" rx="6" ry="9" fill="#31253a"/><ellipse cx="157" cy="124" rx="6" ry="9" fill="#31253a"/>
+ <path d="M128 131L122 154L134 153" stroke="#c9877f" stroke-width="3" fill="none" stroke-linecap="round"/>
+ <path d="M109 177Q131 189 152 172" stroke="#813d65" stroke-width="4" fill="none" stroke-linecap="round"/>
+ <path d="M65 95Q35 128 61 201" stroke="#35263e" stroke-width="21" fill="none" stroke-linecap="round"/>
+ <path d="M195 94Q225 138 194 205" stroke="#35263e" stroke-width="22" fill="none" stroke-linecap="round"/>
+ <path d="M58 117Q47 128 58 149M202 117Q214 126 202 149" stroke="#ba8cd9" stroke-width="7" fill="none"/>
+ <circle cx="201" cy="156" r="13" fill="#9a76cb" stroke="#3e2e54" stroke-width="4"/>
+ <path d="M185 158Q203 181 190 190" stroke="#ba8cd9" stroke-width="4" fill="none"/>
+ <path d="M121 260L139 260L133 282L118 278Z" fill="#75e5d0"/>
+ <path d="M176 236L185 248L178 263L164 251Z" fill="#ffe3a5"/>
+</svg></div>
+<p class="avatar-note">Kiki's animated visual prototype. Identity and history remain in Kiki-Mind.</p>
+<div class="speech" role="status" aria-live="polite"><strong>KIKI SAYS</strong><span id="says">Hey, I'm here. We don't have to conquer the whole backlog today. Pick one thing and we'll start there.</span></div>
+<div class="detail"><span class="dot"></span><span>Local-first assistant</span><span>•</span><span>Control stays with you</span></div>
+</section>
+<div class="stack">
+<section class="panel work">
+<div class="split"><div><p class="eyebrow">YOUR NEXT MOVE</p><h2>Today's focus</h2></div><span class="mini" id="count"></span></div>
+<div class="focus"><div class="label">ONE THING TO START</div><div class="large" id="focusTitle">Loading your tasks…</div><div class="actions"><button class="primary" id="focusDone">Mark this done</button><button class="secondary" id="ack">I'm here</button></div></div>
+<div class="split" style="margin-top:22px"><h2 style="margin:0">Your queue</h2><span class="mini">No giant inbox views</span></div>
+<div class="queue" id="queue"></div>
+<form class="add" id="addForm"><input id="newTask" maxlength="200" placeholder="One thing Kiki should remember…" aria-label="New task" required><button class="primary" type="submit">Add</button></form>
+</section>
+<section class="panel status">
+<div class="split"><h2>Stay on frequency</h2><span class="mini" id="tz"></span></div>
+<p class="info">Need a few minutes? Say so. Kiki can follow up later instead of making you remember to return.</p>
+<div class="actions"><button id="snooze" class="secondary">Check back in 15 min</button><button id="pause" class="secondary">Pause reminders</button></div>
+<p class="mini" id="statusMsg" aria-live="polite" style="margin:14px 0"></p>
+<div class="notice">Tasks stay on this computer. Kiki uses the existing local Jan model for conversation. Calendar booking continues through the Telegram /book command.</div>
+<form id="chatForm"><label for="chatText">Talk to Kiki</label><textarea id="chatText" maxlength="2000" placeholder="Help me get started" required></textarea><button>Send to Kiki</button></form>
+<div id="chatReplies" aria-live="polite"></div>
+</section>
+</div>
+</main>
+<footer>Kiki Control Room · Local preview · Designed for low-powered Windows computers</footer>
+<script>
+const $=id=>document.getElementById(id);
+let current=null;
+async function api(path,data){const r=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await r.json();if(!r.ok)throw new Error(result.error||'Request failed');return result}
+function say(text){$('says').textContent=text}
+function status(text){$('statusMsg').textContent=text}
+function buildTask(t){const div=document.createElement('div');div.className='task';const title=document.createElement('span');title.className='title';title.textContent=t.title;div.appendChild(title);const done=document.createElement('button');done.textContent='Done';done.setAttribute('aria-label','Complete '+t.title);done.onclick=()=>run('done',{id:t.id},'That one is done. Nice work.');div.appendChild(done);return div}
+function render(data){
+ $('chatReplies').replaceChildren();(data.conversations||[]).slice(0,8).reverse().forEach(c=>{const p=document.createElement('p');p.textContent='You: '+c.text+'\nKiki: '+(c.reply||'Queued for local Jan');p.style.whiteSpace='pre-wrap';$('chatReplies').appendChild(p)});
+ $('online').textContent='● Local Kiki connected'+(data.telegram_enabled?' · Telegram ready':'');
+ $('online').style.color='#78ebcf';$('tz').textContent=data.timezone;
+ const open=data.tasks.filter(t=>t.status==='open').sort((a,b)=>a.id-b.id);current=open[0]||null;
+ $('count').textContent=open.length+' open';$('focusTitle').textContent=current?current.title:'The queue is clear.';
+ $('focusDone').disabled=!current;$('focusDone').style.opacity=current?'1':'.4';
+ $('pause').textContent=data.paused?'Resume reminders':'Pause reminders';
+ $('queue').replaceChildren();
+ open.slice(0,8).forEach(t=>$('queue').appendChild(buildTask(t)));
+ if(!open.length){const div=document.createElement('div');div.className='empty';div.textContent="Nothing waiting. That's allowed."; $('queue').appendChild(div);}
+}
+async function load(){try{const r=await fetch('/api/state',{cache:'no-store'});if(!r.ok)throw Error('Not ready');render(await r.json())}catch(e){$('online').textContent='Local Kiki offline';$('online').style.color='#ff9bb6';status('Launch the local server to connect.');}}
+async function run(path,data,msg){try{render(await api(path,data));if(msg)say(msg);status('Saved locally.')}catch(e){status(e.message)}}
+$('addForm').onsubmit=e=>{e.preventDefault();const title=$('newTask').value.trim();if(!title)return;run('tasks',{title},'Got it. I will hold onto that.').then(()=>$('newTask').value='')};
+let chatRetry=null;$('chatForm').onsubmit=async e=>{e.preventDefault();const text=$('chatText').value.trim();if(!text)return;if(chatRetry?.text!==text)chatRetry={text,request_id:'desktop-'+crypto.randomUUID()};try{await api('chat',chatRetry);chatRetry=null;$('chatText').value='';status('Queued for local Jan.');load()}catch(e){status(e.message)}};
+$('focusDone').onclick=()=>{if(current)run('done',{id:current.id},'One less thing hanging over us. Ready for the next?')};
+$('ack').onclick=()=>run('ack',{},'Here we are. Pick one thing. We can go at your pace.');
+$('snooze').onclick=()=>run('snooze',{minutes:15},'Fifteen minutes. I will check in again.');
+$('pause').onclick=async()=>{try{const state=await (await fetch('/api/state')).json();run(state.paused?'resume':'pause',{},state.paused?'Back on frequency.':'Reminders paused. Say when you are ready.')}catch(e){status(e.message)}};
+load();setInterval(load,30000);
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+</script>
+</body>
+</html>
