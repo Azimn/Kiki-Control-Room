@@ -396,8 +396,8 @@ class Bridge:
         context=self.refresh_context();session=context.get('session',{})
         if session.get('status')=='paused':return False
         if session.get('status')=='active':
-            reason=('Invite Jay to resume the existing work session. Next action: '+session.get('next_action','')+
-                    '. Offer one brief optional step. Do not claim work was done.')
+            reason=('Invite Jay to resume the saved work session. Keep its specific contents on the authenticated companion interface; '+
+                    'do not announce task names, private details, or claim completed actions. This is optional.')
         else:
             suggestion=suggest_proactive_step(context,self.clock())
             reason=(('Offer to start one '+suggestion['category']+' from a '+suggestion['freshness']+
