@@ -74,8 +74,10 @@ test("small-step progression needs no replanning and never implies a sent email"
   assert.notEqual(state.next_action,prev);
   assert.match(state.last_outcome,/not independently verified/);
  }
- assert.throws(()=>applySessionCommand(state,"step"),/No further/);
- assert.equal(state.status,"active");
+ state=applySessionCommand(state,"step");
+ assert.equal(state.status,"paused");
+ assert.match(state.next_action,/Verify the outcome/);
+ assert.match(state.last_outcome,/no external result was verified/);
 });
 test("one-tap offer deferral keeps the selected next action and suppresses another offer",async()=>{
  const f=fixture();try{
