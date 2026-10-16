@@ -1,0 +1,19 @@
+name: Executive function usability checks
+on:
+  push:
+    branches: [feature/executive-offload-usability]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  behavioral-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Executive workflow regression
+        run: node --test hosted/tests/executive-usability.test.mjs hosted/tests/sites-tools.test.mjs
+      - name: TypeScript and JSX parse check
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund typescript@5.9.3 && node hosted/tests/tsx-syntax.cjs
