@@ -14,7 +14,25 @@ Updated October 15, 2026. Source status is distinct from live deployment.
 - Persistent email candidate queue, deferred resurfacing, weekday 11:15 Central
   routine, bounded follow-ups, and local revision-bound drafts. Not activated.
 
-## Next: browser-based email assistance
+## Product priority: personal companion and co-working
+
+This roadmap now follows the [Kiki Companion vision](KIKI_COMPANION_VISION.md). The goal is not primarily autonomous email or grading. Kiki should be an engaging, recognizable assistant who helps the owner begin, stay with, and resume work through a voice-first relationship. This is a single-user personal tool, designed to be fun to develop and pleasant to use.
+
+**Milestone C1: private Chrome companion shell.** Add an unpacked Manifest V3 side panel with the existing Kiki visual identity, a current task, and chat. Connect it to the already-running local Python/Jan service rather than creating a second Kiki process or second task database. Verify that conversation, pause, and task status match the current dashboard. Store distribution is not required.
+
+**Milestone C2: durable co-working sessions.** Implement the [Work Sessions contract](WORK_SESSIONS.md) in the existing operational ledger. Kiki initiates a helpful next action, stays in the conversation, records completion, and remembers where to resume after a browser close, interruption, or restart. A notification that says only "open the dashboard" does not meet the goal.
+
+**Milestone C3: live-feeling voice and presence.** Connect local speech input/output or another verified voice backend. Display the animated Kiki avatar with useful states such as greeting, listening, speaking, and waiting. Preserve personality from Kiki-Mind and maintain the same session and commitments in text, voice, Telegram, ChatGPT, and the Site.
+
+**Milestone C4: first useful workday session.** Kiki brings forward one email or test-mailbox task, collaborates on a locally prepared draft, guides review, and maintains momentum across a short queue. A Playwright web adapter is an optional execution helper, not a prerequisite for companionship. See [Browser Companion v0.1](BROWSER_COMPANION_V01.md) and [Email Assistant](EMAIL_ASSISTANT.md).
+
+**Milestone C5: capability expansion.** Add contextual browsing for Canvas, administrative forms, and research; evaluate Playwright MCP; consider Muse delegation with bounded task handoffs and verified results. Do not recreate Muse's broad agent infrastructure inside Kiki unless needed.
+
+For C1 and C2, the acceptance demo is straightforward: the private sidebar loads; the owner can engage Kiki; Kiki introduces one next action without the user opening a separate task list; then after interruption Kiki accurately resumes it. Keep statuses honest: these milestones are planned, not currently running.
+
+## Existing email automation track
+
+## Browser-based email implementation details
 
 1. Reuse Microsoft Playwright rather than writing a browser driver. Begin with
    a dedicated persistent local browser profile, signed into by the owner.
