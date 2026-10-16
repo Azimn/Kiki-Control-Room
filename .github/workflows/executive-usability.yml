@@ -1,0 +1,17 @@
+name: Executive function usability checks
+on:
+  push:
+    branches: [feature/executive-offload-usability]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  behavioral-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Executive workflow regression
+        run: node --test hosted/tests/executive-usability.test.mjs hosted/tests/sites-tools.test.mjs
