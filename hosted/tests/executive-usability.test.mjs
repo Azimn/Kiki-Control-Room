@@ -154,3 +154,28 @@ test("no state change, including a declined offer, can be mistaken for verified 
  assert.throws(()=>applySessionCommand(state,"step"),/Resume/);
  assert.equal(applySessionCommand(state,"finish").status,"completed");
 });
+
+test("a mistaken suggested step can be replaced without a new planning session",async()=>{
+ const f=fixture();try{
+  const started=await act(f,"begin",0,"work-custom1",{task_id:"site-1"});
+  const corrected=await act(f,"next",started.revision,"work-custom2",{detail:"Open the approved staff portal first."});
+  assert.equal(corrected.next_action,"Open the approved staff portal first.");
+  const paused=await act(f,"pause",corrected.revision,"work-custom3");
+  assert.equal(paused.next_action,corrected.next_action);
+  await assert.rejects(act(f,"next",corrected.revision,"work-custom4",{detail:"Stale update"}),/changed/);
+ }finally{f.db.close()}
+});
+
+test("mobile action-first and disclosure controls remain in source",async()=>{
+ const fs=await import("node:fs");
+ const ui=fs.readFileSync(new URL("../app/room.tsx",import.meta.url),"utf8");
+ const css=fs.readFileSync(new URL("../app/globals.css",import.meta.url),"utf8");
+ assert.match(ui,/Start with this step/);
+ assert.match(ui,/Resume exactly here/);
+ assert.match(ui,/aria-expanded=\{showBacklog\}/);
+ assert.match(ui,/This step does not fit, change it/);
+ assert.match(ui,/No external action was verified|no external action was verified|no external result was verified/);
+ assert.match(css,/\.action-column\{order:-1\}/);
+ assert.match(css,/prefers-reduced-motion/);
+ assert.match(css,/\.work-choices button\{min-height:48px\}/);
+});
