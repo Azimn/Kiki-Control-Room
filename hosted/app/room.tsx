@@ -8,11 +8,23 @@ export default function Room(){
  const load=async()=>{try{const r=await fetch('/api/kiki');const d:any=await r.json();if(!r.ok)throw Error(d.error);setData(d);setError('')}catch(e){setError(String((e as Error).message))}};
  useEffect(()=>{load();setThread(localStorage.getItem('kiki-last-thread'));const h=()=>{setVoices(window.speechSynthesis?.getVoices()||[])};h();window.speechSynthesis?.addEventListener('voiceschanged',h);setVoice(localStorage.getItem('kiki-voice')||'');return()=>{window.speechSynthesis?.removeEventListener('voiceschanged',h);recognition.current?.stop()}},[]);
  useEffect(()=>{if(!focus)return;const i=setInterval(()=>setElapsed(v=>v+1),1000);return()=>clearInterval(i)},[focus]);
- useEffect(()=>{if(!thread)return;let cancelled=false;const refresh=async()=>{try{const h=await request({action:'history',thread_id:thread,limit:40});if(!cancelled)setHistory(h.events)}catch{/* A dropped read cannot unsave a committed message. */}};refresh();const timer=setInterval(refresh,12000);return()=>{cancelled=true;clearInterval(timer)}},[thread]);
+ useEffect(()=>{if(!thread){setHistory([]);return}let cancelled=false,inFlight=false,cursor=0;setHistory([]);
+  const refresh=async()=>{if(inFlight)return;inFlight=true;try{for(let page=0;page<12;page++){
+   const h=await request({action:'history',thread_id:thread,after_seq:cursor,limit:40});
+   if(cancelled)return;const rows=h.events||[];if(rows.length){cursor=h.next_after_seq;setHistory(prev=>{
+    const events=new Map(prev.map((e:any)=>[e.event_id,e]));for(const e of rows)events.set(e.event_id,e);
+    return [...events.values()].sort((a:any,b:any)=>a.seq-b.seq);
+   })}if(rows.length<40)break;
+  }}catch{/* A dropped read cannot unsave a committed message. */}finally{inFlight=false}};
+  refresh();const timer=setInterval(refresh,12000);return()=>{cancelled=true;clearInterval(timer)}
+ },[thread]);
  const active=data?.tasks?.find((t:any)=>t.status==='open'&&(!t.snoozed_until||Date.parse(t.snoozed_until)<=Date.now()));const pending=data?.tasks?.filter((t:any)=>t.status==='open')||[];
  const currentSession=data?.operational?.session;
  async function mutate(a:any){setBusy(true);try{await request(a);await load();setTaskTitle('');setAdding(false);setNote(a.action==='create'?'Task saved to your shared workspace.':'Task updated.');if(a.action==='complete')setFocus(false)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
- async function send(){if(!text.trim()||busy)return;setBusy(true);try{if(retry.current?.text!==text)retry.current={text,key:'request-'+crypto.randomUUID()};const p=await request({action:'message',text,retry_key:retry.current.key,thread_id:thread});setThread(p.thread_id);localStorage.setItem('kiki-last-thread',p.thread_id);setText('');retry.current=null;setError('');setNote('Message recorded. Kiki does not generate replies in this Site. Other connected clients can append to the shared history.');try{const h=await request({action:'history',thread_id:p.thread_id});setHistory(h.events)}catch{setNote('Message recorded, but the history display did not refresh. It will retry automatically.')}await load()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+ async function send(){if(!text.trim()||busy)return;setBusy(true);try{if(retry.current?.text!==text)retry.current={text,key:'request-'+crypto.randomUUID()};const p=await request({action:'message',text,retry_key:retry.current.key,thread_id:thread});setThread(p.thread_id);localStorage.setItem('kiki-last-thread',p.thread_id);setText('');retry.current=null;setError('');setNote('Message recorded. Kiki does not generate replies in this Site. Other connected clients can append to the shared history.');try{const h=await request({action:'history',thread_id:p.thread_id});setHistory(prev=>{
+ const events=new Map(prev.map((e:any)=>[e.event_id,e]));for(const e of h.events)events.set(e.event_id,e);
+ return [...events.values()].sort((a:any,b:any)=>a.seq-b.seq);
+})}catch{setNote('Message recorded, but the history display did not refresh. It will retry automatically.')}await load()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  function observed(sources:string[]){
   const rows=data?.operational?.connections?.channels||[];
   const matching=rows.filter((row:any)=>sources.includes(row.source)&&!row.revoked&&row.last_event_at);
