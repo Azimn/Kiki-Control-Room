@@ -101,6 +101,16 @@ class BridgeTests(unittest.TestCase):
         self.assertNotIn('Jane Doe',reason)
         self.assertNotIn('grade',reason.lower())
         self.assertIn('recent PC task snapshot',reason)
+        self.b.save_config({'screen_enabled':True,'vision_model':'vision'})
+        entry=self.b.gateway.sent[0]
+        body={'messages':[{'role':'system','content':entry['marker']},
+                          {'role':'user','content':'A scheduled Kiki check-in is due.'}]}
+        self.b.complete(body)
+        request=[call[1] for call in self.transport.calls if call[0].endswith('/api/chat')][-1]
+        self.assertNotIn('Jane Doe',json.dumps(request))
+        self.assertNotIn('Student Name',json.dumps(request))
+        self.assertEqual(self.desktop.frames,0)
+
     def test_proactive_skips_snoozed_and_completed_tasks(self):
         tasks=[{'id':'pc-1','title':'Open a confidential email','status':'done'},
                {'id':'pc-2','title':'Schedule faculty meeting','status':'open','snoozed_until':'2099-01-01T00:00:00Z'},
