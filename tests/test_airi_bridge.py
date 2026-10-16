@@ -21,12 +21,12 @@ class Gateway:
     def __init__(self):self.sent=[]
     def send_initiative(self,e):self.sent.append(e);return True
 class Transport:
-    def __init__(self):self.calls=[];self.receipts={};self.offline=False;self.lose_ack=False;self.session={'revision':0,'objective':'','next_action':'','last_outcome':'','status':'idle'}
+    def __init__(self):self.calls=[];self.receipts={};self.offline=False;self.lose_ack=False;self.session={'revision':0,'objective':'','next_action':'','last_outcome':'','status':'idle'};self.tasks=[];self.task_snapshot_at=None
     def __call__(self,url,body=None,headers=None,timeout=None):
         self.calls.append((url,body,headers))
         if '/api/companion' in url:
             if self.offline:raise OSError('offline')
-            if body['action']=='context':return {'events':[{'source':'chatgpt','content':{'text':'The cassette is purple.'}}],'session':self.session.copy()}
+            if body['action']=='context':return {'events':[{'source':'chatgpt','content':{'text':'The cassette is purple.'}}],'session':self.session.copy(),'tasks':self.tasks,'task_snapshot_at':self.task_snapshot_at}
             if body['action']=='record':
                 op=body['operation_id']
                 if op in self.receipts and self.receipts[op]!=body:raise ValueError('conflict')
@@ -90,6 +90,34 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(self.b.unanswered,0)
         self.b.unanswered=2;self.now+=4000;self.assertFalse(self.b.tick())
         self.b.unanswered=0;self.b.store.set('snooze_until',self.now+1000);self.assertFalse(self.b.tick())
+    def test_proactive_chooses_actual_task_and_avoids_raw_student_content(self):
+        self.transport.tasks=[{'id':'pc-1','title':'Reply to Student Name Jane Doe about grade','status':'open','created_at':'2026-10-16T00:00:00Z'}]
+        self.transport.task_snapshot_at=m.datetime.fromtimestamp(self.now,m.ZoneInfo('UTC')).isoformat()
+        self.ready_scheduler()
+        self.assertTrue(self.b.tick())
+        reason=self.b.gateway.sent[0]['reason']
+        self.assertIn('email-related task',reason)
+        self.assertIn('open the relevant message',reason)
+        self.assertNotIn('Jane Doe',reason)
+        self.assertNotIn('grade',reason.lower())
+        self.assertIn('recent PC task snapshot',reason)
+    def test_proactive_skips_snoozed_and_completed_tasks(self):
+        tasks=[{'id':'pc-1','title':'Open a confidential email','status':'done'},
+               {'id':'pc-2','title':'Schedule faculty meeting','status':'open','snoozed_until':'2099-01-01T00:00:00Z'},
+               {'id':'pc-3','title':'Canvas lecture preparation','status':'open'}]
+        suggested=m.suggest_proactive_step({'tasks':tasks},self.now)
+        self.assertEqual(suggested['category'],'university task')
+        self.assertNotIn('faculty meeting',str(suggested))
+    def test_proactive_uses_staleness_label_and_does_not_fabricate_urgent_tasks(self):
+        self.transport.tasks=[{'id':'pc-7','title':'Research archive','status':'open'}]
+        self.transport.task_snapshot_at='2026-10-01T00:00:00Z'
+        self.ready_scheduler()
+        self.assertTrue(self.b.tick())
+        reason=self.b.gateway.sent[0]['reason']
+        self.assertIn('previously synchronized PC task snapshot',reason)
+        self.assertNotIn('deadline',reason.lower().replace('inferred deadlines',''))
+        self.transport.tasks=[]
+        self.assertIsNone(m.suggest_proactive_step({'tasks':[]},self.now))
     def test_quiet_hours_and_shared_pause_gate_initiation(self):
         self.ready_scheduler();hour=m.datetime.fromtimestamp(self.now,m.ZoneInfo('America/Chicago')).hour
         self.b.save_config({'quiet_start':hour,'quiet_end':(hour+1)%24});self.assertFalse(self.b.can_initiate())
