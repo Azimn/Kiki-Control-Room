@@ -8,6 +8,8 @@ The initial proactive marker lookup could classify a later human message as an a
 
 The first pairing implementation could reuse cached context when credentials were replaced. Pairing now refuses replacement while replies remain unsynchronized, rotates the local thread and clears cached owner context after a verified replacement. Request fingerprints include the paired device identity.
 
+A final failed-first-pairing check exposed an unsafe rollback path for an initially unpaired laptop. Credentials are now verified before any persistent configuration changes, with an HTTP regression test proving that failed verification leaves no candidate credential behind. The Windows launcher also retries dependency installation on subsequent launches after an interrupted setup.
+
 Initial Windows ctypes calls relied on default 32-bit handle return types. Explicit pointer signatures now cover desktop and foreground-window handles. Runtime Windows capture remains unverified in this Linux build environment.
 
 Initial AIRI receipts were visible to plugin history but absent from the PC’s conversation-turn join. Receipts now include the same conversation-turn linkage used by existing clients. Automatic initiatives use a system actor and a distinct event kind/source. PC context explicitly labels these as automatic Kiki initiatives, not words Jay said.

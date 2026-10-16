@@ -130,6 +130,19 @@ class BridgeTests(unittest.TestCase):
         response=m.http_json('http://127.0.0.1:'+str(server.server_port)+'/v1/chat/completions',self.body,{'Authorization':'Bearer '+self.b.token})
         self.assertEqual(response['choices'][0]['message']['content'],'Totally. The cassette is purple.')
         self.assertEqual(len(transport.receipts),1);self.assertEqual(len(self.b.store.pending()),0)
+    def test_failed_first_pairing_does_not_persist_unverified_credentials(self):
+        self.b.config={**m.DEFAULTS}
+        self.b.config_path.unlink()
+        self.transport.offline=True
+        server=ThreadingHTTPServer(('127.0.0.1',0),m.Handler);server.bridge=self.b
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
+        pairing={'site_url':m.SITE,'device_token':'b'*64,'site_access_token':'unverified','device_id':'new-device'}
+        with self.assertRaises(HTTPError) as exc:
+            m.http_json('http://127.0.0.1:'+str(server.server_port)+'/pair',pairing,{'Authorization':'Bearer '+self.b.token})
+        self.assertEqual(exc.exception.code,400)
+        self.assertNotIn('device_token',self.b.config)
+        self.assertFalse(self.b.config_path.exists())
     def test_real_http_auth_and_sse_proxy(self):
         server=ThreadingHTTPServer(('127.0.0.1',0),m.Handler);server.bridge=self.b
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();self.addCleanup(server.server_close);self.addCleanup(server.shutdown)

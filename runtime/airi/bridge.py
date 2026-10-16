@@ -494,10 +494,15 @@ class Handler(BaseHTTPRequestHandler):
                 if not re.fullmatch('[a-f0-9]{64}',a.get('device_token','')) or not isinstance(a.get('site_access_token'),str):raise ValueError('Invalid pairing file.')
                 changed=self.bridge.config.get('device_id') not in (None,a.get('device_id'))
                 if changed and self.bridge.store.pending():raise ValueError('Synchronize pending replies before replacing this laptop pairing.')
-                old={k:self.bridge.config.get(k) for k in ('site_url','device_token','device_id','site_access_token')}
-                self.bridge.save_config({k:a[k] for k in old})
-                try:self.bridge.cloud({'action':'context','query':''})
-                except Exception:self.bridge.save_config(old);raise ValueError('Pairing could not be verified. Check the Site and try again.')
+                candidate={k:a[k] for k in ('site_url','device_token','device_id','site_access_token')}
+                validate({**self.bridge.config,**candidate})
+                # Verify without changing the current credentials or persistent configuration.
+                try:
+                    checked=self.bridge.http(SITE+'/api/companion',{'action':'context','query':''},
+                        {'Authorization':'Bearer '+candidate['device_token'],'OAI-Sites-Authorization':'Bearer '+candidate['site_access_token']},timeout=25)
+                    if 'error' in checked:raise ValueError('Pairing rejected.')
+                except Exception:raise ValueError('Pairing could not be verified. Check the Site and try again.')
+                self.bridge.save_config(candidate)
                 if changed:
                     self.bridge.store.set('context',{'events':[],'session':{'revision':0,'status':'idle'}})
                     self.bridge.store.set('thread_id','thread-airi-'+str(uuid.uuid4()))
