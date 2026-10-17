@@ -1,0 +1,32 @@
+name: Kiki OpenClaw Windows setup
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/kiki-openclaw-runtime-evaluation
+permissions:
+  contents: read
+jobs:
+  bootstrap-check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and read-only preflight
+        shell: pwsh
+        run: |
+          $script = 'integrations/openclaw/setup-windows/Bootstrap-Kiki.ps1'
+          $t=$null; $e=$null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script), [ref]$t, [ref]$e) | Out-Null
+          if($e.Count){$e | ForEach-Object { Write-Host $_.Message }; throw 'Invalid PowerShell syntax'}
+          & $script -AuditOnly
+          if(-not $?){throw 'Audit failed'}
+      - name: Safety contract present
+        shell: pwsh
+        run: |
+          $content=Get-Content -Raw 'integrations/openclaw/setup-windows/Bootstrap-Kiki.ps1'
+          foreach($required in @('AuditOnly','-NoOnboard','Get-AuthenticodeSignature','Test-Path $config')){
+            if(-not $content.Contains($required)){throw "Guard missing: $required"}
+          }
+          foreach($file in @('AGENTS.md','SOUL.md','IDENTITY.md')){
+            if(-not (Test-Path "integrations/openclaw/setup-windows/workspace/$file")){throw "Missing $file"}
+          }
