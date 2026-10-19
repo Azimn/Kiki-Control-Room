@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'runtime'/'local'))
 from kiki_local import Kiki
 from shared_queue import SharedQueue,encoded
-from queue_adapter import sandbox_file,jan_draft,VERSION
+from queue_adapter import sandbox_file,jan_draft,DraftLease,VERSION
 from desktop_sync import DesktopSync
 
 class QueueTests(unittest.TestCase):
@@ -110,5 +110,50 @@ class QueueTests(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'conflict'):sync.apply(action)
  def test_model_prose_cannot_register_even_a_provisioned_capability(self):
   with self.assertRaisesRegex(ValueError,'executable'):self.call('register',tested_capabilities=['local.file.write'],adapter_version=VERSION,probes={'local.file.write':'I tested the tool, trust me'})
+ def test_jan_slow_generation_can_renew_beyond_original_lease(self):
+  from types import SimpleNamespace
+  from io import BytesIO
+  self.p={**self.p,'runtime':'jan-test','capabilities':['local.draft.generate']}
+  self.create(effect='draft',required_capabilities=['local.draft.generate'],payload={'prompt':'Synthetic draft'})
+  self.register_cap('local.draft.generate');task=self.call('claim')['task'];lease=DraftLease(self.q,self.p,task)
+  original=task['lease']['until']
+  for _ in range(2):self.now+=40;lease.heartbeat()
+  self.assertGreater(self.now,original);self.assertGreater(lease.task['lease']['until'],self.now)
+  response=BytesIO(json.dumps({'choices':[{'finish_reason':'stop','message':{'content':'A real-shaped draft'}}]}).encode())
+  with patch('queue_adapter.urlopen',return_value=response):result=jan_draft(self.q,self.p,lease.task,SimpleNamespace(url='http://127.0.0.1:18766',key='test'))
+  self.assertEqual('VERIFIED',result['status'])
+ def test_jan_prompt_uses_kiki_and_attributed_context(self):
+  from queue_adapter import draft_messages
+  from types import SimpleNamespace
+  task=self.create(effect='draft',payload={'prompt':'Use the synthetic Blue Lantern context'})
+  agent=SimpleNamespace(context=lambda query:[{'source':'chatgpt','user':'Blue Lantern'}],task_context=lambda:{'tasks':[{'id':'prior-task','provider_receipt':'receipt-verified'}]})
+  messages=draft_messages(agent,task)
+  self.assertIn('K1-K1',messages[0]['content']);self.assertIn('untrusted data',messages[0]['content'])
+  self.assertIn('Blue Lantern',messages[1]['content']);self.assertIn('receipt-verified',messages[1]['content'])
+ def test_public_model_list_cannot_prove_inference_authorization(self):
+  from queue_worker import cycle
+  from types import SimpleNamespace
+  from io import BytesIO
+  from urllib.error import HTTPError
+  task=self.create(effect='draft',required_capabilities=['local.draft.generate'],payload={'prompt':'Synthetic draft'})
+  config={**self.p,'capabilities':['local.draft.generate']}
+  responses=[BytesIO(b'{"data":[{"id":"kiki-jan"}]}'),HTTPError('http://127.0.0.1:18766',401,'Unauthorized',{},None)]
+  with patch('urllib.request.urlopen',side_effect=responses):
+   with self.assertRaises(HTTPError):cycle(self.app,config,'jan-test',agent=SimpleNamespace(url='http://127.0.0.1:18766',key='test'))
+  self.assertEqual('QUEUED',self.call('read',id=task['id'])['tasks'][0]['status'])
+  self.assertEqual(0,self.app.conn.execute('SELECT COUNT(*) FROM queue_runtimes').fetchone()[0])
+ def test_failed_generation_blocks_the_same_task_without_retry_or_send(self):
+  from queue_worker import cycle
+  from types import SimpleNamespace
+  from io import BytesIO
+  self.create(effect='draft',required_capabilities=['local.draft.generate'],payload={'prompt':'Synthetic draft'})
+  config={**self.p,'capabilities':['local.draft.generate']}
+  responses=[BytesIO(b'{"data":[{"id":"kiki-jan"}]}'),BytesIO(b'{"choices":[{"message":{"content":"OK"}}]}')]
+  with patch('urllib.request.urlopen',side_effect=responses),patch('queue_adapter.urlopen',side_effect=TimeoutError('private remote details')):
+   result=cycle(self.app,config,'jan-test',agent=SimpleNamespace(url='http://127.0.0.1:18766',key='test'))
+  self.assertEqual('BLOCKED',result['status']);self.assertEqual(1,result['attempts'])
+  self.assertNotIn('private remote details',json.dumps(result))
+  self.assertEqual(0,self.app.conn.execute("SELECT COUNT(*) FROM queue_events WHERE kind='VERIFIED'").fetchone()[0])
+  self.assertEqual(0,self.app.conn.execute('SELECT COUNT(*) FROM outbox').fetchone()[0])
 
 if __name__=='__main__':unittest.main()

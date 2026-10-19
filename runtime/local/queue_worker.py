@@ -34,7 +34,16 @@ def cycle(app, config, runtime, sandbox=None, agent=None):
         with urlopen(Request(agent.url+'/v1/models',headers={'Authorization':'Bearer '+agent.key}),timeout=5) as r:
             models=json.load(r)
         if not models.get('data'): raise ValueError('No model available')
-        proof='model-list:'+hashlib.sha256(json.dumps(models,sort_keys=True).encode()).hexdigest()
+        # Jan's model list can be public on loopback: test authenticated inference
+        # before claiming generation capability. No tools or private context.
+        probe=Request(agent.url+'/v1/chat/completions',data=json.dumps({'model':'kiki-jan',
+            'messages':[{'role':'user','content':'Connection test. Reply OK.'}],'max_tokens':8,'temperature':0,
+            'chat_template_kwargs':{'enable_thinking':False}}).encode(),
+            headers={'Content-Type':'application/json','Authorization':'Bearer '+agent.key})
+        with urlopen(probe,timeout=45) as r:tested=json.load(r)
+        if not tested.get('choices') or not tested['choices'][0].get('message',{}).get('content'):
+            raise ValueError('Authenticated model probe failed')
+        proof='authenticated-inference:'+hashlib.sha256(json.dumps(tested,sort_keys=True).encode()).hexdigest()
     with app.queue.transaction() as db:
         probe_receipt=app.queue.event(db,p['owner'],None,runtime,'TOOL_PROBE',{'capability':capability,'readback':proof,'adapter_version':VERSION})
     app.queue.dispatch(p,{'op':'register','request_id':'probe-'+str(uuid.uuid4()),'tested_capabilities':[capability],
@@ -42,7 +51,15 @@ def cycle(app, config, runtime, sandbox=None, agent=None):
     result=app.queue.dispatch(p,{'op':'claim','request_id':'claim-'+str(uuid.uuid4())})
     task=result['task']
     if task:
-        result=sandbox_file(app.queue,p,task,sandbox) if sandbox is not None else jan_draft(app.queue,p,task,agent)
+        try:
+            result=sandbox_file(app.queue,p,task,sandbox) if sandbox is not None else jan_draft(app.queue,p,task,agent)
+        except Exception:
+            # No raw provider exception text (which can contain credentials/content).
+            with app.queue.transaction() as db:current=app.queue.get(db,p['owner'],task['id'])
+            if current['status']!='CLAIMED' or not current['lease'] or current['lease']['until']<=app.queue.clock():raise
+            result=app.queue.dispatch(p,{'op':'finish','request_id':'adapter-failed-'+task['id']+'-'+str(task['attempts']),
+                'id':task['id'],'version':current['version'],'lease_token':task['lease']['token'],
+                'status':'BLOCKED','evidence':{'reason':'Adapter did not produce a verified result; check the private model or sandbox connection.'}})
     return result
 
 
@@ -51,6 +68,7 @@ if __name__=='__main__':
     parser.add_argument('--db',default=str(Path.home()/'.kiki'/'control-room.sqlite3'))
     parser.add_argument('--runtime',required=True)
     parser.add_argument('--sandbox')
+    parser.add_argument('--model-url',default='http://127.0.0.1:18766',choices=['http://127.0.0.1:18766','http://127.0.0.1:18767'])
     args=parser.parse_args()
     config=json.loads(os.environ['KIKI_QUEUE_CREDENTIALS'])[args.runtime]
     app=Kiki(args.db)
@@ -58,7 +76,7 @@ if __name__=='__main__':
         agent=None
         if args.sandbox is None:
             from jan_agent import JanAgent
-            agent=JanAgent(app,os.environ['KIKI_MODEL_KEY'])
+            agent=JanAgent(app,os.environ['KIKI_MODEL_KEY'],url=args.model_url)
         result=cycle(app,config,args.runtime,args.sandbox,agent)
         print(json.dumps({'status':result.get('status'),'task_id':result.get('id'),
                           'evidence':result.get('evidence'),'reason':result.get('reason')}))

@@ -167,10 +167,14 @@ provisioned for this mode. The destination is derived from the stable task ID,
 uses exclusive create, flush/fsync and separate readback; an existing mismatch is
 never overwritten. Paths and shell commands cannot be supplied by the task.
 
-For Jan, omit `--sandbox` and provision only `local.draft.generate`. It probes the
-existing private Jan transport and calls the model with no tools. Persisted draft
-readback yields VERIFIED with `outcome: DRAFTED`; never SENT. Live Jan generation
-and actual OpenClaw invocation remain separate deployment tests.
+For Jan, omit `--sandbox` and provision only `local.draft.generate` plus heartbeat
+scope. It probes authenticated inference through the existing private Jan
+transport and calls the model with no tools. The lease renews every 20 seconds
+during the bounded 180-second call. Persisted draft readback yields VERIFIED with
+`outcome: DRAFTED`; never SENT. The existing serial Jan worker also supports this
+bounded cycle in-process, without a separate scheduler or runtime credential.
+See [Jan shared tasks](JAN_SHARED_TASKS.md) for request/context wiring and live
+local-model evidence. Cross-machine transport remains a separate deployment gate.
 
 ChatGPT-only capabilities are not provisioned locally. There is no supported
 local invocation of ChatGPT connectors. This slice does **not** expose remote
@@ -228,7 +232,7 @@ node --test tests/*.test.mjs
 node scripts/run-framework.mjs build
 ```
 
-66 Python tests passed, including claim races on two connections, duplicate and
+The initial queue slice passed 66 Python tests, including claim races on two connections, duplicate and
 conflicting submissions, stale versions/leases, offline runtimes, safety denial,
 forged/replayed signatures, model-prose capability rejection, cross-owner reads,
 legacy completion bypass, relay retries, draft-only Jan contract, and restart.
@@ -244,7 +248,7 @@ This is an acceptance harness invocation, **not** an OpenClaw or ChatGPT receipt
 
 Acceptance A–E are not yet fully passed. Gates are live Site/Windows rollout,
 ChatGPT plugin tool refresh/approval and harmless task creation, real OpenClaw
-command-policy invocation, live Jan draft generation, independent cross-surface
+command-policy invocation, cross-machine Jan draft generation, independent cross-surface
 receipt read, gateway restart, and an actual Windows reboot. No calendar/mail
 action is used in these tests. The existing poller and deferred local Google OAuth
 remain unchanged. Do not claim end-to-end operation from these tests.
@@ -255,3 +259,15 @@ Site patch targets version 31 and must be rebased/checked against version 33 bef
 publication. This feature has not overwritten that deployment. Coordinate the
 single owner/device mapping and transport contract here before either side
 activates a new task integration. Windows activation has also not been performed.
+
+The Jan follow-up fixes its direct-SQL completion bypass, adds shared submission
+and resume context, authenticated inference probing and draft lease heartbeats.
+76 Python tests pass, and a real local Jan request/draft plus independent SQLite
+readback and cold-process recovery passed. Exact evidence and remaining gates are
+in [Jan shared tasks](JAN_SHARED_TASKS.md). This is not a hosted or cross-machine
+deployment claim.
+
+The Site delta also adds owner-scoped `work_session` to the existing desktop-sync
+response. Jan validates its revision/status/size, rejects conflicting revisions,
+and preserves the newest checkpoint. This remains an undeployed local patch until
+Site v33 reconciliation is approved. The hosted suite now passes 55 tests.

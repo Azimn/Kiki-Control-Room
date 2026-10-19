@@ -655,7 +655,7 @@ def main():
     if os.getenv('KIKI_MODEL_KEY'):
         sys.path.insert(0,str(Path(__file__).parent))
         from jan_agent import JanAgent
-        app.agent=JanAgent(app,os.environ['KIKI_MODEL_KEY'])
+        app.agent=JanAgent(app,os.environ['KIKI_MODEL_KEY'],url=os.getenv('KIKI_JAN_URL','http://127.0.0.1:18766'))
         agent_thread=threading.Thread(target=app.agent.run,args=(stop,),daemon=True)
         agent_thread.start()
     thread = threading.Thread(target=app.run_background, args=(stop,), daemon=True)

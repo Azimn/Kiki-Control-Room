@@ -95,10 +95,17 @@ index 0000000..e72b67a
 + </section>
 +}
 diff --git a/lib/desktop-sync.mjs b/lib/desktop-sync.mjs
-index 8e9f35b..34f261d 100644
+index 8e9f35b..85b6c85 100644
 --- a/lib/desktop-sync.mjs
 +++ b/lib/desktop-sync.mjs
-@@ -25,7 +25,7 @@ export async function syncView(db,owner,now=Date.now()){
+@@ -1,5 +1,6 @@
+ // D1 stores a read-only SQLite snapshot and a durable command queue, never task authority.
+ import {createKikiToolService} from './kiki-tools.mjs';
++import {companionSchema,getSession} from './companion.mjs';
+ export async function queueChat(db,owner,turn,text){
+  const linked=await db.prepare('SELECT owner_id FROM desktop_sync WHERE owner_id=?').bind(owner).first();
+  if(!linked)throw Error('Open this workspace as its owner to link the PC.');
+@@ -25,7 +26,7 @@ export async function syncView(db,owner,now=Date.now()){
   const row=await db.prepare('SELECT * FROM desktop_sync WHERE owner_id=?').bind(owner).first();
   const actions=await db.prepare("SELECT request_id,task_id,action,payload_json,status,result_json,created_at FROM desktop_actions WHERE owner_id=? AND status!='applied' ORDER BY created_at,request_id").bind(owner).all();
   const snapshot=row?JSON.parse(row.snapshot_json):{};
@@ -107,7 +114,15 @@ index 8e9f35b..34f261d 100644
    sync:{linked:!!row,online:!!row?.last_seen&&now-Date.parse(row.last_seen)<60000,last_seen:row?.last_seen||null,
     initialized:!!row&&row.snapshot_seq>=0,authority:'desktop_sqlite',telegram_enabled:!!snapshot.telegram_enabled,calendar_enabled:!!snapshot.calendar_enabled,model_enabled:!!snapshot.model_enabled,model_status:snapshot.model_status||'not_configured'}};
  }
-@@ -74,7 +74,8 @@ export async function exchange(db,body,now=new Date().toISOString()){
+@@ -51,6 +52,7 @@ export async function queueTask(db,owner,args){
+  return {ok:true,queued:true,request_id:requestId,status:'pending'};
+ }
+ export async function exchange(db,body,now=new Date().toISOString()){
++ await companionSchema(db);
+  const rows=await db.prepare('SELECT * FROM desktop_sync').bind().all();
+  if(rows.results.length!==1)return {paired:false,actions:[],acknowledged:[]};
+  const row=rows.results[0],owner=row.owner_id;
+@@ -74,7 +76,8 @@ export async function exchange(db,body,now=new Date().toISOString()){
     const payload=JSON.parse(action.payload_json);
     await createKikiToolService(db,'kiki_desktop').commitTurn({ownerId:owner,modelId:'Jan-v3.5-4B-Q4_K_XL'},{turn_id:payload.turn_id,text:result.reply});
    }
@@ -117,7 +132,7 @@ index 8e9f35b..34f261d 100644
    acknowledged.push(result.request_id);
   }
   const dialogues=body.dialogues||[];if(!Array.isArray(dialogues)||dialogues.length>30)throw Error('Invalid dialogue receipts.');
-@@ -85,7 +86,9 @@ export async function exchange(db,body,now=new Date().toISOString()){
+@@ -85,10 +88,12 @@ export async function exchange(db,body,now=new Date().toISOString()){
    await writer.commitTurn({ownerId:owner,modelId:'Jan-v3.5-4B-Q4_K_XL'},{turn_id:turn.turn_id,text:d.reply});
    acknowledged.push(d.request_id);
   }
@@ -128,6 +143,10 @@ index 8e9f35b..34f261d 100644
   // Sequence is SQLite-persisted. Late HTTP responses cannot replace a newer snapshot.
   stmts.push(db.prepare('UPDATE desktop_sync SET device_id=COALESCE(device_id,?),last_seen=?,imported=1,snapshot_json=CASE WHEN snapshot_seq<? THEN ? ELSE snapshot_json END,snapshot_seq=MAX(snapshot_seq,?) WHERE owner_id=?').bind(body.device_id,now,body.seq,JSON.stringify(snapshot),body.seq,owner));
   await db.batch(stmts);
+  const actions=await db.prepare("SELECT request_id,task_id,action,payload_json FROM desktop_actions WHERE owner_id=? AND status='pending' ORDER BY created_at,request_id LIMIT 50").bind(owner).all();
+- return {paired:true,owner_id:owner,actions:actions.results.map(a=>({...a,payload:JSON.parse(a.payload_json)})),acknowledged,context:await sharedContext(db,owner),archive:await sharedContext(db,owner,body.context_after??0)};
++ return {paired:true,owner_id:owner,actions:actions.results.map(a=>({...a,payload:JSON.parse(a.payload_json)})),acknowledged,context:await sharedContext(db,owner),archive:await sharedContext(db,owner,body.context_after??0),work_session:await getSession(db,owner)};
+ }
 diff --git a/lib/kiki-tools.mjs b/lib/kiki-tools.mjs
 index bf70620..6f41e77 100644
 --- a/lib/kiki-tools.mjs
@@ -243,16 +262,17 @@ index 5585ec3..e7039a5 100644
   d.db.prepare('UPDATE companion_sessions SET revision=2 WHERE owner_id=?').run(owner);
 diff --git a/tests/shared-queue.test.mjs b/tests/shared-queue.test.mjs
 new file mode 100644
-index 0000000..f96608a
+index 0000000..7a66c4a
 --- /dev/null
 +++ b/tests/shared-queue.test.mjs
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,44 @@
 +import test from 'node:test';
 +import assert from 'node:assert/strict';
 +import fs from 'node:fs';
 +import {DatabaseSync} from 'node:sqlite';
 +import {queueCommand,queueView} from '../lib/shared-queue.mjs';
 +import {exchange,linkOwner} from '../lib/desktop-sync.mjs';
++import {companionSchema,putSession} from '../lib/companion.mjs';
 +class D1{
 + constructor(){this.db=new DatabaseSync(':memory:');for(const f of ['0000_hard_umar.sql','0001_thankful_nick_fury.sql'])this.db.exec(fs.readFileSync(new URL('../drizzle/'+f,import.meta.url),'utf8'))}
 + prepare(q){let a=[];const db=this.db,p={bind(...v){a=v;return p},async first(){return db.prepare(q).get(...a)||null},async all(){return {results:db.prepare(q).all(...a)}},async run(){return {meta:db.prepare(q).run(...a)}}};return p}
@@ -284,6 +304,11 @@ index 0000000..f96608a
 +});
 +test('expired capability TTL is never advertised from a stale snapshot',async()=>{
 + const d=new D1;await linkOwner(d,owner,'o','o');await exchange(d,snap(1,{authority:'windows_sqlite',tasks:[{owner,id:'task-test',eligible_runtimes:['expired']}],runtimes:[{runtime:'expired',expires:1}]}));assert.deepEqual((await queueView(d,owner)).tasks[0].eligible_runtimes,[]);
++});
++test('Jan receives the same owner-scoped revisioned work session in desktop sync',async()=>{
++ const d=new D1;await linkOwner(d,owner,'o','o');await companionSchema(d);
++ await putSession(d,owner,{revision:0,session:{objective:'Synthetic review',next_action:'Read the saved draft',last_outcome:'DRAFTED',status:'paused'}});
++ const result=await exchange(d,snap(1));assert.equal(result.work_session.revision,1);assert.equal(result.work_session.next_action,'Read the saved draft');assert.equal(result.owner_id,owner);
 +});
 diff --git a/tests/sites-tools.test.mjs b/tests/sites-tools.test.mjs
 index ac8d628..7ad466e 100644

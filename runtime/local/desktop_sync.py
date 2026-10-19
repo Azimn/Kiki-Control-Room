@@ -155,6 +155,8 @@ class DesktopSync:
             self.app.agent.remember_shared(result['context'])
         if self.app.agent and 'archive' in result:
             self.app.agent.remember_archive(result['archive'])
+        if self.app.agent and 'work_session' in result:
+            self.app.agent.remember_work_session(result['work_session'])
         with self.app.lock, self.app.conn:
             owner=result.get('owner_id')
             if isinstance(owner,str) and owner:
