@@ -1,0 +1,51 @@
+name: Kiki complexity review
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly Monday 14:00 UTC; GitHub schedules only default-branch workflows.
+    - cron: '0 14 * * 1'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  assess:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source under review
+        uses: actions/checkout@v4
+        with:
+          # Until the working PR chain reaches main, scheduled audits use its latest branch.
+          ref: ${{ github.event_name == 'schedule' && 'feature/animated-presence-browser-voice' || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test reviewer
+        run: python -m unittest discover -s tests -p 'test_improvement_audit.py' -v
+      - name: Fetch most recent scheduled baseline when available
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          previous="$(gh run list --workflow improvement.yml --event schedule --status success --limit 5 --json databaseId --jq '.[0].databaseId' || true)"
+          if [[ -n "$previous" ]]; then
+            gh run download "$previous" -n kiki-complexity -D .prior || true
+          fi
+      - name: Generate non-executing improvement report
+        shell: bash
+        run: |
+          args=(--root . --json-out audit-output/snapshot.json --markdown-out audit-output/report.md)
+          if [[ -f .prior/snapshot.json ]]; then args+=(--baseline .prior/snapshot.json); fi
+          python runtime/improvement/audit.py "${args[@]}"
+          cat audit-output/report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain measurements and recommendations
+        uses: actions/upload-artifact@v4
+        with:
+          name: kiki-complexity
+          path: audit-output/
+          retention-days: 90
