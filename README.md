@@ -42,3 +42,7 @@ CI tests the local runtime on Windows and Linux, Python 3.10 and 3.12. These are
 ## Intended next milestone
 
 Build Kiki Browser Companion v0.1 as a private, locally installed Chrome side panel, backed by a durable, Kiki-initiated co-working session. Keep the existing local runtime, dashboard, and shared state as authorities. Prove that Kiki can greet, guide one real task, pause, and later resume it without requiring the owner to reconstruct the plan. Develop voice and browser-assisted email incrementally; sending remains disabled in the current prototype. See the [roadmap](docs/ROADMAP.md), [browser plan](docs/BROWSER_COMPANION_V01.md), [work-session contract](docs/WORK_SESSIONS.md), [email design](docs/EMAIL_ASSISTANT.md), and [shared context](docs/SHARED_CONTEXT.md).
+
+## Bounded continuous improvement
+
+Kiki's source-complexity reviewer collects repeatable metrics, compares previous snapshots, and produces evidence-based suggestions without executing changes or accessing private history. Use `python runtime/improvement/audit.py --root . --json-out audit-output/snapshot.json --markdown-out audit-output/report.md` and review [the improvement-loop policy](docs/IMPROVEMENT_LOOP.md). The weekly workflow starts only after it is merged to the default branch; proposals remain subject to test and review.
