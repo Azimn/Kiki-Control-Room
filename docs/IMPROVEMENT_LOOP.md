@@ -14,7 +14,7 @@ Compare prior report: add --baseline previous/snapshot.json to the report comman
 
 The workflow named Kiki complexity review checks the assessor on pull requests, accepts manual dispatch, and requests a weekly Monday 14:00 UTC report. It publishes a job summary and retains its JSON/Markdown artifact for 90 days. It downloads the preceding successful scheduled report, if present, to create a week-to-week comparison. No previous report means no trend claim.
 
-**Important deployment limitation:** GitHub scheduled workflows run only from the default branch. The repository's main currently contains only the original README; the actual prototype lives on a stack of open PRs. This workflow is staged in a feature PR and will NOT start scheduling until it is merged to main. After merge, the workflow is configured to assess feature/animated-presence-browser-voice until the working branches are consolidated. Then change its checkout target to main. Claims of active recurring monitoring before this merge would be false.
+**Important deployment limitation:** GitHub scheduled workflows run only from the default branch. The repository's main currently contains only the original README; the actual prototype lives on a stack of open PRs. This workflow is staged in a feature PR and will NOT start scheduling until it is merged to main. Each scheduled run checks out the default branch that contains its workflow, so consolidation is required before the weekly audit covers the working Kiki implementation. Claims of active recurring monitoring before this merge would be false.
 
 ## Authorized development cycle
 
