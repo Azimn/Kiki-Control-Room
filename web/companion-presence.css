@@ -1,0 +1,20 @@
+/* Lightweight character motion. The SVG remains readable with JS disabled. */
+.portrait .kiki-eye {transform-box:fill-box;transform-origin:center;animation:kikiBlink 6.1s ease-in-out infinite}
+.portrait .kiki-eye:nth-of-type(2) {animation-delay:.07s}
+.portrait[data-state="thinking"] .halo {animation:kikiHalo 2.2s ease-in-out infinite}
+.portrait[data-state="speaking"] .halo {animation:kikiHalo 1s ease-in-out infinite}
+.portrait[data-state="listening"] .halo {border-color:var(--mint)}
+.portrait[data-state="celebrating"] svg {animation:kikiCelebrate .5s ease-in-out 2}
+.voice-controls {display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0 14px}
+.voice-controls button {padding:9px 12px;border-radius:10px;background:#36375a;border:1px solid #656386}
+.voice-controls button:disabled {opacity:.5;cursor:not-allowed}
+.voice-controls label {color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px}
+.voice-controls select {max-width:230px;background:#15172f;color:var(--text);border:1px solid #656386;border-radius:8px;padding:8px}
+.voice-controls input {accent-color:var(--mint)}
+.voice-controls #voiceStatus {width:100%;font-size:12px;color:var(--muted)}
+.voice-controls :is(button,select,input):focus-visible {outline:2px solid var(--gold);outline-offset:2px}
+@keyframes kikiBlink {0%,44%,47%,100%{transform:scaleY(1)}45.3%,46%{transform:scaleY(.08)}}
+@keyframes kikiHalo {0%,100%{box-shadow:0 0 0 26px #8674d108,0 0 0 54px #8674d108}50%{box-shadow:0 0 0 34px #8674d118,0 0 0 61px #8674d108}}
+@keyframes kikiCelebrate {0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-11px) rotate(-2deg)}}
+@media(max-width:850px){.voice-controls select{max-width:175px}.voice-controls{gap:8px}}
+@media(prefers-reduced-motion:reduce){.portrait .kiki-eye,.portrait[data-state] svg,.portrait[data-state] .halo{animation:none!important;transition:none!important}}
