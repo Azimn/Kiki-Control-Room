@@ -569,6 +569,8 @@ def make_handler(app: Kiki):
                 "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
                 "/sw.js": ("sw.js", "text/javascript; charset=utf-8"),
                 "/kiki-icon.svg": ("kiki-icon.svg", "image/svg+xml"),
+                "/companion-presence.js": ("companion-presence.js", "text/javascript; charset=utf-8"),
+                "/companion-presence.css": ("companion-presence.css", "text/css; charset=utf-8"),
             }
             item = assets.get(self.path)
             if not item:
