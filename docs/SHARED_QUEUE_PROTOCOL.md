@@ -262,7 +262,7 @@ activates a new task integration. Windows activation has also not been performed
 
 The Jan follow-up fixes its direct-SQL completion bypass, adds shared submission
 and resume context, authenticated inference probing and draft lease heartbeats.
-76 Python tests pass, and a real local Jan request/draft plus independent SQLite
+The Jan follow-up passed 76 Python tests, and a real local Jan request/draft plus independent SQLite
 readback and cold-process recovery passed. Exact evidence and remaining gates are
 in [Jan shared tasks](JAN_SHARED_TASKS.md). This is not a hosted or cross-machine
 deployment claim.
@@ -271,3 +271,26 @@ The Site delta also adds owner-scoped `work_session` to the existing desktop-syn
 response. Jan validates its revision/status/size, rejects conflicting revisions,
 and preserves the newest checkpoint. This remains an undeployed local patch until
 Site v33 reconciliation is approved. The hosted suite now passes 55 tests.
+
+### October 21 adapter review
+
+Adapters now re-read the authoritative SQLite claim before any file access or
+model request. An expired lease, wrong runtime, stale version or changed attempt
+is rejected before starting the action. Execution parameters come from the stored
+task, not a caller-modified claim copy. Post-action readback and live-lease checks
+remain mandatory. Drafts require an explicit `finish_reason: stop`, nonblank text
+and no tool calls before a READBACK receipt can be written.
+
+The existing Windows/Linux, Python 3.10/3.12 CI matrix now runs all `test_*.py`
+files rather than only `test_local_runtime.py`, and syntax-checks every local
+runtime module. Local verification: 81 Python tests and compileall passed. Remote
+CI results are separate from this local run.
+
+The synthetic HTTP/file/cold-process acceptance passed again with task
+`task-88a43384-9cb3-4320-9559-3880636f6b8b` and readback
+`receipt-96d1051e-6d22-435f-9b3d-a9e504ee9ff1`. Actual authenticated Jan request
+interpretation, draft generation, SQLite readback and cold-process recovery
+passed again with task `task-12e44947-f0f2-42de-9cf3-9312c9722110`, outcome DRAFTED,
+and receipt `receipt-d141e9af-caa2-4f1d-bfe5-c36486cce59b`. These remain isolated
+local acceptance runs; Site publication, cross-machine transport, production
+Windows activation and full reboot acceptance remain unverified.

@@ -14,6 +14,20 @@ from urllib.request import Request, urlopen
 VERSION='queue-adapter-1'
 
 
+def current_claim(queue, principal, presented):
+    """Resolve a live claim before I/O; caller payload is never execution authority."""
+    with queue.transaction() as db:
+        task=queue.get(db,principal['owner'],presented.get('id'))
+        lease=task.get('lease')
+        offered=presented.get('lease') or {}
+        if (task['status']!='CLAIMED' or task['authorization']!='approved'
+            or task.get('safety_denial') or not lease or lease['runtime']!=principal['runtime']
+            or lease['until']<=queue.clock() or lease['token']!=offered.get('token')
+            or task['attempts']!=presented.get('attempts') or task['version']!=presented.get('version')):
+            raise ValueError('Expired or mismatched claim; no adapter action was started')
+        return task
+
+
 class DraftLease:
     """Renew one SQLite claim while a bounded model request is in flight."""
     def __init__(self, queue, principal, task, interval=20):
@@ -59,6 +73,7 @@ def draft_messages(agent,task):
 
 
 def sandbox_file(queue, principal, task, root):
+    task=current_claim(queue,principal,task)
     if task['effect']!='sandbox_file' or task['privacy']!='synthetic' or set(task['required_capabilities'])!={'local.file.write'}:
         raise ValueError('Only approved synthetic sandbox writes are supported')
     if principal['runtime']!=task['lease']['runtime']: raise ValueError('Runtime mismatch')
@@ -89,6 +104,7 @@ def sandbox_file(queue, principal, task, root):
 
 
 def jan_draft(queue, principal, task, agent):
+    task=current_claim(queue,principal,task)
     if task['effect']!='draft' or set(task['required_capabilities'])!={'local.draft.generate'}:
         raise ValueError('Jan supports bounded drafts only')
     prompt=task['payload'].get('prompt')
@@ -103,11 +119,11 @@ def jan_draft(queue, principal, task, agent):
     with DraftLease(queue,principal,task) as lease:
         with urlopen(request,timeout=180) as response: result=json.load(response)
         choice=result['choices'][0]
-        if choice.get('finish_reason') not in (None,'stop'):raise ValueError('Incomplete draft response')
+        if choice.get('finish_reason')!='stop':raise ValueError('Incomplete draft response')
         if choice['message'].get('tool_calls'):raise ValueError('Model tool calls are not draft execution')
         draft=choice['message']['content']
     task=lease.task
-    if not isinstance(draft,str) or not 1<=len(draft)<=4000: raise ValueError('Invalid draft')
+    if not isinstance(draft,str) or not draft.strip() or len(draft)>4000: raise ValueError('Invalid draft')
     artifact={'outcome':'DRAFTED','draft':draft,'revision':str(uuid.uuid4()),'model':str(result.get('model','kiki-jan'))[:160],
               'provider_response_id':str(result.get('id',''))[:160],'attempt':task['attempts'],'context_sha256':context_hash,
               'origin':task['origin'],'adapter_version':VERSION}

@@ -91,7 +91,7 @@ class QueueTests(unittest.TestCase):
   self.create(effect='draft',required_capabilities=['local.draft.generate'],payload={'prompt':'Draft a synthetic greeting'})
   self.register_cap('local.draft.generate')
   task=self.call('claim')['task']
-  response=BytesIO(json.dumps({'choices':[{'message':{'content':'A synthetic local draft.'}}]}).encode())
+  response=BytesIO(json.dumps({'choices':[{'finish_reason':'stop','message':{'content':'A synthetic local draft.'}}]}).encode())
   with patch('queue_adapter.urlopen',return_value=response) as transport:
    result=jan_draft(self.q,self.p,task,SimpleNamespace(url='http://127.0.0.1:18766',key='private-test-key'))
    self.assertEqual(1,transport.call_count)
@@ -155,5 +155,42 @@ class QueueTests(unittest.TestCase):
   self.assertNotIn('private remote details',json.dumps(result))
   self.assertEqual(0,self.app.conn.execute("SELECT COUNT(*) FROM queue_events WHERE kind='VERIFIED'").fetchone()[0])
   self.assertEqual(0,self.app.conn.execute('SELECT COUNT(*) FROM outbox').fetchone()[0])
+ def test_expired_file_claim_cannot_touch_disk(self):
+  self.create();task=self.claim();self.now+=61
+  with self.assertRaisesRegex(ValueError,'no adapter action'):sandbox_file(self.q,self.p,task,self.tmp.name)
+  self.assertEqual([],list(Path(self.tmp.name).glob('task-*.txt')))
+ def test_expired_jan_claim_cannot_contact_the_model(self):
+  from types import SimpleNamespace
+  self.p={**self.p,'runtime':'jan-test','capabilities':['local.draft.generate']}
+  self.create(effect='draft',required_capabilities=['local.draft.generate'],payload={'prompt':'Synthetic draft'})
+  self.register_cap('local.draft.generate');task=self.call('claim')['task'];self.now+=61
+  with patch('queue_adapter.urlopen') as transport:
+   with self.assertRaisesRegex(ValueError,'no adapter action'):jan_draft(self.q,self.p,task,SimpleNamespace())
+   transport.assert_not_called()
+ def test_adapter_uses_authoritative_payload_instead_of_modified_claim_copy(self):
+  import copy
+  self.create();task=self.claim();tampered=copy.deepcopy(task);tampered['payload']['content']='UNAUTHORIZED_CHANGED_CONTENT'
+  result=sandbox_file(self.q,self.p,tampered,self.tmp.name)
+  self.assertEqual('KIKI_OK',(Path(self.tmp.name)/(task['id']+'.txt')).read_text())
+  self.assertEqual('VERIFIED',result['status'])
+ def test_wrong_runtime_and_stale_version_cannot_start_file_execution(self):
+  self.create();task=self.claim()
+  for p,t in [({**self.p,'runtime':'another-runtime'},task),(self.p,{**task,'version':task['version']-1})]:
+   with self.assertRaisesRegex(ValueError,'no adapter action'):sandbox_file(self.q,p,t,self.tmp.name)
+  self.assertEqual([],list(Path(self.tmp.name).glob('task-*.txt')))
+ def test_incomplete_empty_and_tool_call_drafts_never_get_readback_receipts(self):
+  from types import SimpleNamespace
+  from io import BytesIO
+  self.p={**self.p,'runtime':'jan-test','capabilities':['local.draft.generate']}
+  self.create(effect='draft',required_capabilities=['local.draft.generate'],payload={'prompt':'Synthetic draft'})
+  self.register_cap('local.draft.generate');task=self.call('claim')['task']
+  choices=[{'message':{'content':'Missing finish reason'}},
+           {'finish_reason':'length','message':{'content':'Truncated draft'}},
+           {'finish_reason':'stop','message':{'content':'   '}},
+           {'finish_reason':'stop','message':{'content':'Tool attempt','tool_calls':[{'id':'unsupported'}]}}]
+  for choice in choices:
+   with patch('queue_adapter.urlopen',return_value=BytesIO(json.dumps({'choices':[choice]}).encode())):
+    with self.assertRaises(ValueError):jan_draft(self.q,self.p,task,SimpleNamespace(url='http://127.0.0.1:18766',key='test'))
+  self.assertEqual(0,self.app.conn.execute("SELECT COUNT(*) FROM queue_events WHERE kind IN ('READBACK','VERIFIED')").fetchone()[0])
 
 if __name__=='__main__':unittest.main()
