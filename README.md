@@ -26,9 +26,15 @@ Local Ollama or an eligible user-authorized ChatGPT integration can later provid
 
 ## Verification
 
+Shared capability queue implementation and integration protocol:
+[Shared task protocol](docs/SHARED_QUEUE_PROTOCOL.md). Windows SQLite remains
+the task authority; the Site carries pending commands and confirmed projections.
+The matching Site source delta is `integrations/shared-queue-site.patch`, based on
+hosted source revision `672b5bb`. Deployment and live acceptance are separate gates.
+
 Local Telegram calendar booking is implemented through the optional signed Apps Script bridge; see [Calendar booking setup](docs/CALENDAR_BOOKING.md). `/book` schedules directly on an explicit user command, while `/block` offers an optional preview. Deployment, calendar-writing authorization, and live acceptance are required before enabling it. The existing local server remains loopback-only.
 
-Local server tests: `python -m unittest discover -s tests -p "test_local_runtime.py" -v`.
+Local runtime, shared queue, Jan, backup and HTTP tests: `python -m unittest discover -s tests -p "test_*.py" -v`.
 Apps Script simulated tests: `node --test tests/relay.test.cjs`.
 
 CI tests the local runtime on Windows and Linux, Python 3.10 and 3.12. These are prototype acceptance tests, **not a claim that any real Google or Telegram accounts are already connected**.

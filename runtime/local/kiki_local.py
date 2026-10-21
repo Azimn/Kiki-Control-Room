@@ -110,6 +110,9 @@ class Kiki:
                 self.conn.execute('UPDATE tasks SET sync_id=? WHERE id=?', ('task-' + str(uuid.uuid4()), row['id']))
             self.conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS task_sync_id ON tasks(sync_id)')
             self.conn.execute('CREATE TABLE IF NOT EXISTS desktop_receipts(request_id TEXT PRIMARY KEY,content_hash TEXT NOT NULL,status TEXT NOT NULL,acknowledged INTEGER NOT NULL DEFAULT 0)')
+        sys.path.insert(0, str(Path(__file__).parent))
+        from shared_queue import SharedQueue
+        self.queue = SharedQueue(self)
 
     def close(self):
         with self.lock:
@@ -363,7 +366,7 @@ class Kiki:
             raise ValueError("Valid task ID required.")
         with self.lock, self.conn:
             cur = self.conn.execute(
-                "UPDATE tasks SET status='done',done_at=? WHERE id=? AND status='open'",
+                "UPDATE tasks SET status='done',done_at=? WHERE id=? AND status='open' AND queue_json IS NULL",
                 ((now or datetime.now(timezone.utc)).isoformat(), task_id),
             )
             if cur.rowcount != 1:
@@ -593,6 +596,10 @@ def make_handler(app: Kiki):
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError("Expected JSON object")
+                if self.path == '/api/shared-queue':
+                    credentials = json.loads(os.getenv('KIKI_QUEUE_CREDENTIALS', '{}'))
+                    principal = app.queue.authenticate(body, credentials)
+                    return self._json(200, app.queue.dispatch(principal, body['command']))
                 if self.path == "/api/tasks":
                     app.add(body.get("title"))
                 elif self.path == '/api/chat':
@@ -614,7 +621,7 @@ def make_handler(app: Kiki):
                     app.pause(False)
                 else:
                     return self._json(404, {"error": "Not found"})
-            except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            except (ValueError, TypeError, json.JSONDecodeError, sqlite3.Error) as exc:
                 return self._json(400, {"error": str(exc)[:180]})
             return self._json(200, app.state())
 
@@ -636,12 +643,19 @@ def main():
                tz=os.getenv("KIKI_TIMEZONE", "America/Chicago"),
                calendar=CalendarBridge(os.environ["KIKI_CALENDAR_BRIDGE_URL"], os.environ["KIKI_CALENDAR_BRIDGE_KEY"])
                if os.getenv("KIKI_CALENDAR_BRIDGE_URL") and os.getenv("KIKI_CALENDAR_BRIDGE_KEY") else None)
+    # Acquire the existing listening port before starting any Telegram consumer.
+    # A duplicate startup must fail before it can poll or send.
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(app))
+    except OSError:
+        app.close()
+        raise
     stop = threading.Event()
     agent_thread=None
     if os.getenv('KIKI_MODEL_KEY'):
         sys.path.insert(0,str(Path(__file__).parent))
         from jan_agent import JanAgent
-        app.agent=JanAgent(app,os.environ['KIKI_MODEL_KEY'])
+        app.agent=JanAgent(app,os.environ['KIKI_MODEL_KEY'],url=os.getenv('KIKI_JAN_URL','http://127.0.0.1:18766'))
         agent_thread=threading.Thread(target=app.agent.run,args=(stop,),daemon=True)
         agent_thread.start()
     thread = threading.Thread(target=app.run_background, args=(stop,), daemon=True)
@@ -654,12 +668,12 @@ def main():
         sync_thread = threading.Thread(target=sync.run, args=(stop,), daemon=True)
         sync_thread.start()
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(app))
         print(f"Kiki is ready: http://localhost:{args.port} (localhost only)")
         server.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:
         pass
     finally:
+        server.server_close()
         stop.set()
         thread.join(timeout=3)
         if sync_thread:
