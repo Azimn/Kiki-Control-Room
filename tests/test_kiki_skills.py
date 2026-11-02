@@ -35,6 +35,14 @@ class SkillTests(unittest.TestCase):
         self.assertFalse(out["external_effect"])
         self.assertTrue(any("approval" in x.lower() for x in out["steps"]))
 
+    def test_plan_depth_changes_batching(self):
+        a = self.act("plan", recipe="start_work", depth=1)
+        b = self.act("plan", recipe="start_work", depth=2)
+        c = self.act("plan", recipe="start_work", depth=3)
+        self.assertEqual([len(x) for x in a["batches"]], [5])
+        self.assertEqual([len(x) for x in b["batches"]], [2, 3])
+        self.assertEqual([len(x) for x in c["batches"]], [1]*5)
+
     def test_plan_depth_invalid(self):
         with self.assertRaises(ValueError): self.act("plan", recipe="start_work", depth=10)
 
@@ -48,6 +56,10 @@ class SkillTests(unittest.TestCase):
         out = self.act("brain_dump", text="I need to plan class; I need to plan class; remember to get milk")
         self.assertEqual(len(out["tasks"]), 2)
         self.assertTrue(all(t["needs_review"] for t in out["tasks"]))
+
+    def test_brain_dump_duplicate_is_not_truncation(self):
+        out = self.act("brain_dump", text="Remember to pay bill; remember to pay bill")
+        self.assertFalse(out["truncated"])
 
     def test_brain_dump_not_persisted(self):
         self.act("brain_dump", text="Remember to check the mail")
@@ -77,6 +89,18 @@ class SkillTests(unittest.TestCase):
         finished = self.act("session_complete", session_id=sid, user_confirmed=True, request_id="req-four")
         self.assertEqual(finished["status"], "COMPLETED_USER_REPORTED")
         self.assertFalse(finished["verified_external_effect"])
+
+    def test_session_survives_new_python_process(self):
+        out = self.act("session_start", objective="Work", next_action="Open draft", request_id="start")
+        sid = out["session"]["session_id"]
+        self.act("session_pause", session_id=sid, next_action="Check facts", request_id="pause")
+        import os
+        env = dict(os.environ, KIKI_DB_PATH=str(self.db))
+        result = subprocess.run([sys.executable, str(SOURCE), "run"],
+            input=json.dumps({"skill":"session_resume","session_id":sid,"request_id":"resume"}),
+            text=True, capture_output=True, env=env)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(json.loads(result.stdout)["session"]["next_action"], "Check facts")
 
     def test_conflicting_request_key(self):
         self.act("session_start", objective="One", next_action="Open one", request_id="same")
