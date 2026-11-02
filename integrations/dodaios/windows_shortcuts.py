@@ -60,9 +60,11 @@ def profile_store(path):
                     raise ValueError("Configured folder is not a directory")
             if kind == "power_automate":
                 try:
-                    uuid.UUID(target)
+                    normalized = str(uuid.UUID(target))
                 except ValueError:
                     raise ValueError("Power Automate flow must be an operator-configured UUID")
+                if normalized != target:
+                    raise ValueError("Flow ID must use canonical lowercase UUID format")
             if kind == "url":
                 parts = urlsplit(target)
                 if (parts.scheme != "https" or not parts.hostname or parts.username or parts.password
