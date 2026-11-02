@@ -85,7 +85,7 @@ def _windows_system_exe(name):
     if sys.platform != "win32":
         raise ValueError("Windows shortcut execution requires Windows")
     root = Path(os.environ.get("SystemRoot", r"C:\Windows"))
-    executable = root / "System32" / ALLOWED[name]
+    executable = (root / "explorer.exe") if name == "explorer" else (root / "System32" / ALLOWED[name])
     if not executable.is_file():
         raise ValueError("Built-in Windows application executable not found")
     return executable
