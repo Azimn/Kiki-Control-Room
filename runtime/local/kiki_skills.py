@@ -115,7 +115,9 @@ def plan(data):
         require_str(context, "context", 300)
     all_steps = list(RECIPES[name])
     # Depth changes batching, not the safety steps or the requirements for approval.
-    batches = [all_steps] if depth == 1 else [[step] for step in all_steps]
+    batches = ([all_steps] if depth == 1 else
+               [all_steps[:2], all_steps[2:]] if depth == 2 else
+               [[step] for step in all_steps])
     return {"status": "PLANNED", "recipe": name, "context": context,
             "steps": all_steps, "batches": batches,
             "next_action": all_steps[0], "external_effect": False,
@@ -130,6 +132,7 @@ def brain_dump(data):
     raw = require_str(data.get("text"), "text", 4000)
     parts = re.split(r"[\n;]+|(?<=[.!?])\s+(?=[A-Z])", raw)
     candidates, seen = [], set()
+    was_truncated = False
     for item in parts:
         item = ACTION_PREFIX.sub("", item.strip().strip("-• ")).strip().strip(".!? ")
         if not item or len(item) > 400:
@@ -139,11 +142,12 @@ def brain_dump(data):
             seen.add(key)
             candidates.append({"title": item, "status": "CANDIDATE", "needs_review": True})
         if len(candidates) >= 12:
+            was_truncated = len(parts) > len(seen)
             break
     if not candidates:
         raise ValueError("No actionable candidates found")
     return {"status": "CANDIDATES_ONLY", "tasks": candidates,
-            "truncated": len(parts) > len(candidates), "external_effect": False,
+            "truncated": was_truncated, "external_effect": False,
             "note": "No reminders or commitments created; review before importing"}
 
 
