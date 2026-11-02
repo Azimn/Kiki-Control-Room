@@ -89,6 +89,25 @@ class WindowsShortcuts(unittest.TestCase):
         self.assertFalse(result["externally_verified"])
         self.assertFalse(result["shared_history_written"])
 
+    def test_power_automate_flow_requires_uuid(self):
+        path = self.save({"bad-flow": [{"kind": "power_automate", "target": "powershell -exec bypass"}]})
+        with self.assertRaises(ValueError):
+            m.profile_store(path)
+
+    def test_power_automate_launch_returns_unverified_run_id(self):
+        opened = []
+        flow = "dfd0c814-2c30-4cd8-849d-a4b2d2f4f33b"
+        path = self.save({"graded-flow": [{"kind": "power_automate", "target": flow}]})
+        result = m.run_profile(path, "graded-flow", launcher=lambda _: self.fail("No EXE expected"),
+                               opener=lambda value: opened.append(value))
+        self.assertEqual(result["status"], "LAUNCH_REQUESTED")
+        self.assertEqual(len(opened), 1)
+        self.assertTrue(opened[0].startswith("ms-powerautomate:/console/flow/run?workflowId=" + flow))
+        self.assertIn("&runId=", opened[0])
+        self.assertEqual(result["actions"][0]["evidence"]["flow_id"], flow)
+        self.assertFalse(result["actions"][0]["evidence"]["completion_verified"])
+        self.assertFalse(result["shared_history_written"])
+
     def test_stop_on_first_failed_launch(self):
         path = self.save({"prep": [
             {"kind": "exe", "target": str(self.executable)},
