@@ -61,6 +61,13 @@ TOOLS = [
     {"name": "kiki_choose_next_action",
      "description": "Choose one eligible next action from supplied task snapshot. Ignore completed, declined and snoozed tasks. No database access or writes.",
      "inputSchema": {"type": "object", "properties": {"tasks": {"type": "array", "maxItems": 50, "items": {"type": "object"}}}, "required": ["tasks"], "additionalProperties": False}},
+    {"name": "kiki_list_shortcuts",
+     "description": "List operator-approved Windows shortcut profiles. No launches or task changes.",
+     "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
+    {"name": "kiki_run_shortcut",
+     "description": "Launch one operator-approved Windows shortcut by ID. OS launch acknowledgement is not visible-window or external-task verification. Never supply shell commands.",
+     "inputSchema": {"type": "object", "properties": {"profile_id": {"type": "string", "maxLength": 40}},
+                     "required": ["profile_id"], "additionalProperties": False}},
     {"name": "kiki_review_handoff",
      "description": "Normalize a specialist's task result. Never treats an agent message as proof of external execution, and never updates task state.",
      "inputSchema": {"type": "object", "properties": {
@@ -181,8 +188,32 @@ def review_handoff(args):
             "provider_verified": False, "task_state_changed": False}
 
 
+def _shortcut_module():
+    import importlib.util
+    from pathlib import Path
+    path = Path(__file__).with_name("windows_shortcuts.py")
+    spec = importlib.util.spec_from_file_location("kiki_windows_shortcuts", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def list_shortcuts(args):
+    require_fields(args, set(), set())
+    import os
+    return _shortcut_module().describe_profiles(os.environ.get("KIKI_WINDOWS_SHORTCUTS_FILE"))
+
+
+def run_shortcut(args):
+    require_fields(args, {"profile_id"}, {"profile_id"})
+    import os
+    return _shortcut_module().run_profile(os.environ.get("KIKI_WINDOWS_SHORTCUTS_FILE"), args["profile_id"])
+
+
 HANDLERS = {
     "kiki_get_recipe": get_recipe,
+    "kiki_list_shortcuts": list_shortcuts,
+    "kiki_run_shortcut": run_shortcut,
     "kiki_compile_brain_dump": compile_brain_dump,
     "kiki_choose_next_action": choose_next_action,
     "kiki_review_handoff": review_handoff,
