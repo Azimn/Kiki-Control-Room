@@ -89,6 +89,15 @@ class WindowsShortcuts(unittest.TestCase):
         self.assertFalse(result["externally_verified"])
         self.assertFalse(result["shared_history_written"])
 
+    def test_explorer_binary_is_under_windows_root(self):
+        from unittest.mock import patch
+        root = self.root / "Windows"
+        root.mkdir()
+        explorer = root / "explorer.exe"
+        explorer.write_text("synthetic only", encoding="utf-8")
+        with patch.object(m.sys, "platform", "win32"), patch.dict(m.os.environ, {"SystemRoot": str(root)}):
+            self.assertEqual(m._windows_system_exe("explorer"), explorer)
+
     def test_power_automate_flow_requires_uuid(self):
         path = self.save({"bad-flow": [{"kind": "power_automate", "target": "powershell -exec bypass"}]})
         with self.assertRaises(ValueError):
