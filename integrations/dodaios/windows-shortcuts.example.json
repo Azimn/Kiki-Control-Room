@@ -1,0 +1,17 @@
+{
+  "profiles": {
+    "open-calculator": [
+      {"kind": "app", "target": "calculator"}
+    ],
+    "open-scratchpad": [
+      {"kind": "app", "target": "notepad"}
+    ],
+    "open-file-explorer": [
+      {"kind": "app", "target": "explorer"}
+    ],
+    "start-notes-and-reference": [
+      {"kind": "app", "target": "notepad"},
+      {"kind": "url", "target": "https://example.org"}
+    ]
+  }
+}
