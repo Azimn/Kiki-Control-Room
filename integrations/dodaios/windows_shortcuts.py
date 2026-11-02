@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -19,7 +20,7 @@ MAX_PROFILES = 30
 MAX_ACTIONS = 5
 ID_RE = re.compile(r"^[a-z][a-z0-9_-]{1,39}$")
 ALLOWED = {"calculator": "calc.exe", "notepad": "notepad.exe", "explorer": "explorer.exe"}
-KIND = {"app", "exe", "folder", "url"}
+KIND = {"app", "exe", "folder", "url", "power_automate"}
 
 
 def profile_store(path):
@@ -57,6 +58,11 @@ def profile_store(path):
                     raise ValueError("Only an explicit EXE file may be launched")
                 if kind == "folder" and not dest.is_dir():
                     raise ValueError("Configured folder is not a directory")
+            if kind == "power_automate":
+                try:
+                    uuid.UUID(target)
+                except ValueError:
+                    raise ValueError("Power Automate flow must be an operator-configured UUID")
             if kind == "url":
                 parts = urlsplit(target)
                 if (parts.scheme != "https" or not parts.hostname or parts.username or parts.password
@@ -107,6 +113,12 @@ def run_profile(path, profile_id, *, launcher=None, opener=None):
             elif kind == "folder":
                 opener(str(Path(target).resolve()))
                 evidence = {"kind": "open_request_submitted"}
+            elif kind == "power_automate":
+                run_id = str(uuid.uuid4())
+                flow_uri = "ms-powerautomate:/console/flow/run?workflowId=" + target + "&runId=" + run_id
+                opener(flow_uri)
+                evidence = {"kind": "flow_start_requested", "run_id": run_id,
+                            "flow_id": target, "completion_verified": False}
             else:
                 opener(target)
                 evidence = {"kind": "open_request_submitted"}
