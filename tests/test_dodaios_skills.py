@@ -90,7 +90,7 @@ class WorkflowMicrotools(unittest.TestCase):
                         "params": {"protocolVersion": "2025-06-18"}})
         self.assertEqual(init["result"]["protocolVersion"], "2025-06-18")
         ls = m.reply({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-        self.assertEqual(len(ls["result"]["tools"]), 4)
+        self.assertEqual(len(ls["result"]["tools"]), 6)
 
     def test_notification_does_not_reply(self):
         self.assertIsNone(m.reply({"jsonrpc": "2.0", "method": "notifications/initialized"}))
