@@ -1,0 +1,42 @@
+name: DODAIOS Kiki model-free preflight
+
+on:
+  push:
+    branches:
+      - audit/dodaios-preflight-20261105
+  pull_request:
+    paths:
+      - ".github/workflows/dodaios-preflight.yml"
+      - "integrations/dodaios/**"
+      - "skills/**"
+      - "tests/test_dodaios_skills.py"
+      - "tests/test_windows_shortcuts.py"
+      - "tests/test_dodaios_preflight.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dodaios-preflight-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic-contracts:
+    name: Synthetic MCP and shortcut contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: MCP stdio handshake and six-tool contracts
+        run: python -m unittest discover -s tests -p "test_dodaios_skills.py" -v
+      - name: Windows shortcut safety, mock execution only
+        run: python -m unittest discover -s tests -p "test_windows_shortcuts.py" -v
+      - name: Multi-agent and work-session boundary simulations
+        run: python -m unittest discover -s tests -p "test_dodaios_preflight.py" -v
