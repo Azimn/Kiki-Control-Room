@@ -1,0 +1,9 @@
+{
+  "team_id": "TEXAMPLE",
+  "app_id": "AEXAMPLE",
+  "bot_id": "BEXAMPLE",
+  "bot_user_id": "UBOTEXAMPLE",
+  "allowed_users": ["UOWNEREXAMPLE"],
+  "allowed_channels": ["DDMEXAMPLE"],
+  "runtime_port": 8765
+}

@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 BASE = Path(__file__).resolve().parents[2]
 WEB = BASE / "web"
 MAX_BODY = 8192
+MAX_SLACK_BODY = 12288
 EMAIL_CHECKIN_HOUR = 11
 EMAIL_CHECKIN_MINUTE = 15
 
@@ -261,7 +262,7 @@ class Kiki:
             (dedupe, message, (now or datetime.now(timezone.utc)).isoformat()),
         )
 
-    def state(self):
+    def state(self, *, slack_history=False):
         with self.lock:
             tasks = [dict(r) for r in self.conn.execute(
                 "SELECT id,title,status,created_at,done_at FROM tasks ORDER BY id DESC LIMIT 100"
@@ -281,7 +282,9 @@ class Kiki:
                 "model_enabled": self.agent is not None,
                 "model_status": self._get('model_status','not_configured'),
                 "shared_context_seq": self._get('agent_shared_context',{'seq':0})['seq'],
-                "conversations": [dict(r) for r in self.conn.execute('SELECT id,source,text,status,reply FROM agent_jobs ORDER BY created_at DESC LIMIT 20').fetchall()] if self.agent else [],
+                "conversations": [dict(r) for r in self.conn.execute(
+                    "SELECT id,source,text,status,reply FROM agent_jobs WHERE source!='slack' OR ? "
+                    "ORDER BY created_at DESC LIMIT 20", (slack_history,))] if self.agent else [],
             }
 
     def calendar_command(self, cmd, rest, now, request_id=None):
@@ -562,7 +565,11 @@ def make_handler(app: Kiki):
                 self.end_headers()
                 return
             if self.path == "/api/state":
-                return self._json(200, app.state())
+                slack_history = (os.getenv('KIKI_SLACK_LOCAL_HISTORY') == '1'
+                                 and self.headers.get('Host') in (
+                                     f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}')
+                                 and self.headers.get('Sec-Fetch-Site') in (None, 'same-origin', 'none'))
+                return self._json(200, app.state(slack_history=slack_history))
             assets = {
                 "/": ("index.html", "text/html; charset=utf-8"),
                 "/offline": ("index.html", "text/html; charset=utf-8"),
@@ -591,11 +598,16 @@ def make_handler(app: Kiki):
                 return self._json(415, {"error": "JSON required"})
             try:
                 length = int(self.headers.get("Content-Length", "0"))
-                if length <= 0 or length > MAX_BODY:
+                limit = MAX_SLACK_BODY if self.path == '/api/slack-turn' else MAX_BODY
+                if length <= 0 or length > limit:
                     return self._json(413, {"error": "Invalid body size"})
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError("Expected JSON object")
+                if self.path == '/api/slack-turn':
+                    from slack_bridge import route
+                    status, result = route(app, self.headers, body)
+                    return self._json(status, result)
                 if self.path == '/api/shared-queue':
                     credentials = json.loads(os.getenv('KIKI_QUEUE_CREDENTIALS', '{}'))
                     principal = app.queue.authenticate(body, credentials)
@@ -622,6 +634,9 @@ def make_handler(app: Kiki):
                 else:
                     return self._json(404, {"error": "Not found"})
             except (ValueError, TypeError, json.JSONDecodeError, sqlite3.Error) as exc:
+                if self.path == '/api/slack-turn':
+                    return self._json(503 if isinstance(exc, sqlite3.Error) else 400,
+                                      {'status': 'unavailable' if isinstance(exc, sqlite3.Error) else 'invalid'})
                 return self._json(400, {"error": str(exc)[:180]})
             return self._json(200, app.state())
 

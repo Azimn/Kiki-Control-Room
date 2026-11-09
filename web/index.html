@@ -129,7 +129,7 @@ function say(text){$('says').textContent=text}
 function status(text){$('statusMsg').textContent=text}
 function buildTask(t){const div=document.createElement('div');div.className='task';const title=document.createElement('span');title.className='title';title.textContent=t.title;div.appendChild(title);const done=document.createElement('button');done.textContent='Done';done.setAttribute('aria-label','Complete '+t.title);done.onclick=()=>run('done',{id:t.id},'That one is done. Nice work.');div.appendChild(done);return div}
 function render(data){
- $('chatReplies').replaceChildren();(data.conversations||[]).slice(0,8).reverse().forEach(c=>{const p=document.createElement('p');p.textContent='You: '+c.text+'\nKiki: '+(c.reply||'Queued for local Jan');p.style.whiteSpace='pre-wrap';$('chatReplies').appendChild(p)});
+ $('chatReplies').replaceChildren();(data.conversations||[]).slice(0,8).reverse().forEach(c=>{const p=document.createElement('p');p.textContent=(c.source==='slack'?'Slack · You: ':'You: ')+c.text+'\nKiki: '+(c.reply||'Queued for local Jan');p.style.whiteSpace='pre-wrap';$('chatReplies').appendChild(p)});
  $('online').textContent='● Local Kiki connected'+(data.telegram_enabled?' · Telegram ready':'');
  $('online').style.color='#78ebcf';$('tz').textContent=data.timezone;
  const open=data.tasks.filter(t=>t.status==='open').sort((a,b)=>a.id-b.id);current=open[0]||null;
