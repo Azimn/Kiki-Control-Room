@@ -66,9 +66,14 @@ Invite both bot apps to one private test channel and enable the
 `groups:history` scope and `message.groups` event for Kiki. The
 `peer_exchange` policy names the peer `app_id`, `bot_id`, `bot_user_id`,
 private `channel`, and a dedicated tool-free `dodaios_session` separate from
-the owner's DM. The channel ignores ordinary traffic. Kiki replies in thread
-to the allowlisted owner's explicit mentions and to messages that start with
-Kiki's Slack mention from the verified peer bot. The peer can start a new
+the owner's DM. The channel ignores ordinary traffic. Kiki answers explicit
+mentions from the allowlisted owner or verified peer bot in the channel
+timeline, or in the original thread for a threaded mention. Peer bot requests
+must start with Kiki's Slack mention. Before generating a reply, the listener
+reads up to eight earlier messages from the approved channel and, when
+applicable, eight from the thread. It includes only the owner and the two
+verified bot identities. Slack text remains conversation data and the Dodaios
+side session has no tools. The peer can start a new
 thread, and Kiki replies to the peer at most once per thread to prevent loops.
 Set `thread_ts` to limit peer requests to a single selected thread.
 The peer reads the reply through its own authorized Slack integration.

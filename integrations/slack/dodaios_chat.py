@@ -4,6 +4,7 @@ import json
 from urllib.error import HTTPError
 from urllib.request import Request
 
+from integrations.slack.channel_context import channel_prompt
 from runtime.local.slack_bridge import loopback_opener
 
 
@@ -55,7 +56,8 @@ class DodaiosChat:
                 if not self.inbox.set_native_turn(ident, None, 'submitting'):
                     return {'status': 'queued'}
                 try:
-                    sent = self.request('/messages', {'text': prefix + event['text']})
+                    message = channel_prompt(event, event.get('read_context')) if self.channel_only else event['text']
+                    sent = self.request('/messages', {'text': prefix + message})
                 except HTTPError as exc:
                     if exc.code == 409:
                         self.inbox.set_native_turn(ident, 'submitting', None)

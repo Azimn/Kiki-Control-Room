@@ -296,6 +296,9 @@ def deliver(inbox, policy, runtime, web, secrets, row, now, stop):
             or not policy.allows_delivery(event)):
         inbox.update(ident, previous, 'denied')
         return
+    if event.get('channel_chat'):
+        from integrations.slack.channel_context import recent_channel_context
+        event['read_context'] = lambda: recent_channel_context(web, policy, event, secrets)
     result = runtime(event)
     status = result.get('status')
     if status == 'denied':
@@ -309,7 +312,7 @@ def deliver(inbox, policy, runtime, web, secrets, row, now, stop):
     if stop.is_set() or not inbox.update(ident, previous, 'sending'):
         return
     channel = event['channel']
-    thread = event['thread_ts'] or (None if channel.startswith('D') else event['ts'])
+    thread = event['thread_ts'] or (None if channel.startswith('D') or event.get('channel_chat') else event['ts'])
     try:
         response = web.chat_postMessage(
             channel=channel, thread_ts=thread, text=escape(redact(reply, *secrets)[:1800], quote=False),

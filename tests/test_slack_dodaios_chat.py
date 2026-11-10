@@ -35,6 +35,19 @@ class DodaiosChatTests(unittest.TestCase):
         self.assertEqual(self.runtime(EVENT), {'status': 'ready', 'reply': 'synthetic reply'})
         self.assertEqual(sum(call.args[0] == '/messages' for call in self.runtime.request.call_args_list), 1)
 
+    def test_channel_context_is_read_only_when_submitting_native_turn(self):
+        runtime = DodaiosChat(self.inbox, 'channel-session', 'kiki', channel_only=True)
+        context = Mock(return_value={'recent_channel': [{'from': 'Calibos', 'text': 'I joined Slack'}]})
+        runtime.request = Mock(side_effect=[timeline(), {'turn_id': 'one'}, timeline()])
+        event = {**EVENT, 'channel': 'CTEST', 'channel_chat': True, 'read_context': context}
+        self.assertEqual(runtime(event), {'status': 'queued'})
+        self.assertEqual(runtime(event), {'status': 'queued'})
+        context.assert_called_once()
+        sent = runtime.request.call_args_list[1].args[1]['text']
+        self.assertIn('live Slack bridge', sent)
+        self.assertIn('I joined Slack', sent)
+        self.assertIn('synthetic test', sent)
+
     def test_ambiguous_post_is_recovered_without_retrying(self):
         digest = hashlib.sha256(b'TTEST:EvTEST').hexdigest()
         recovered = timeline(

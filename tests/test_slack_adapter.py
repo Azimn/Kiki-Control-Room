@@ -114,6 +114,40 @@ class SlackTests(unittest.TestCase):
         self.assertTrue(self.inbox.admit({**top, 'event': 'EvAGAIN', 'ts': REPLY_TS, 'thread_ts': TS}))
         self.assertEqual(self.inbox.status(), {'pending': 1})
 
+    @unittest.skipIf(SlackApiError is None, 'optional slack-sdk dependency')
+    def test_channel_timeline_thread_routing_and_bounded_slack_context(self):
+        policy = bot.Policy(POLICY.team, POLICY.app, POLICY.bot, POLICY.bot_user, POLICY.users,
+                            POLICY.channels, ('ACALIBOS', 'BCALIBOS', 'UCALIBOS', 'CTEST', ''))
+        self.web.conversations_history.return_value = {'ok': True, 'messages': [
+            {'ts': '1234567889.100000', 'bot_id': 'BCALIBOS', 'text': 'Calibos is ready'},
+            {'ts': '1234567889.200000', 'user': 'UOTHER', 'text': 'unapproved participant'},
+            {'ts': '1234567889.300000', 'user': 'UOWNER', 'text': KEY},
+            {'ts': TS, 'user': 'UOWNER', 'text': 'current message'},
+        ]}
+        self.web.conversations_replies.return_value = {'ok': True, 'messages': [
+            {'ts': '1234567888.100000', 'user': 'UOWNER', 'text': 'Thread topic'},
+        ]}
+        for i, parent in enumerate(('', '1234567888.100000')):
+            payload = envelope(channel='CTEST', channel_type='group', thread_ts=parent, text='<@UBOT> Hi')
+            payload['event_id'] = f'EvCHANNEL{i}'
+            self.inbox.admit(policy.event(payload))
+
+            def runtime(event):
+                context = event['read_context']()
+                self.assertEqual(context['recent_channel'], [
+                    {'from': 'Calibos', 'text': 'Calibos is ready'},
+                    {'from': 'Owner', 'text': '[redacted]'},
+                ])
+                expected = [{'from': 'Owner', 'text': 'Thread topic'}] if parent else []
+                self.assertEqual(context['earlier_thread'], expected)
+                return {'status': 'ready', 'reply': 'Channel reply'}
+
+            self.process(runtime, policy)
+            self.assertEqual(self.web.chat_postMessage.call_args.kwargs['thread_ts'], parent or None)
+        self.assertEqual(self.web.conversations_history.call_count, 2)
+        self.web.conversations_replies.assert_called_once_with(
+            channel='CTEST', latest=TS, inclusive=False, limit=8, ts='1234567888.100000')
+
     def test_ack_after_durable_commit_and_replay(self):
         def committed(response):
             self.assertEqual(response['envelope_id'], 'envelope-1')
