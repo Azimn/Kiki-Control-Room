@@ -39,9 +39,9 @@ class Policy:
                 raise ValueError('Invalid Slack policy identifier')
             return value
 
-        def allowlist(name, prefix):
+        def allowlist(name, prefix, *, empty_ok=False):
             values = data[name]
-            if not isinstance(values, list) or not values:
+            if not isinstance(values, list) or (not values and not empty_ok):
                 raise ValueError('Slack allowlists must be nonempty lists')
             return frozenset(ident(value, prefix) for value in values)
 
@@ -58,8 +58,11 @@ class Policy:
                     peer_data['thread_ts'])
             if any(own == other for own, other in zip((app, bot, bot_user), peer[:3])):
                 raise ValueError('A Slack bot cannot be its own peer')
-        return cls(ident(data['team_id'], 'T'), app, bot, bot_user,
-                   allowlist('allowed_users', ('U', 'W')), allowlist('allowed_channels', ('D', 'C', 'G')), peer)
+        users = allowlist('allowed_users', ('U', 'W'), empty_ok=peer is not None)
+        channels = allowlist('allowed_channels', ('D', 'C', 'G'), empty_ok=peer is not None)
+        if bool(users) != bool(channels):
+            raise ValueError('Configure both human allowlists or neither in peer-only mode')
+        return cls(ident(data['team_id'], 'T'), app, bot, bot_user, users, channels, peer)
 
     def allows(self, channel, user):
         return isinstance(channel, str) and channel in self.channels and isinstance(user, str) and user in self.users
@@ -438,22 +441,24 @@ def main():
         if type(port) is not int or not 1 <= port <= 65535 or port == HEALTH_PORT:
             raise ValueError('Invalid runtime port')
         native = data.get('dodaios_chat')
-        if native is not None and (
-            not isinstance(native, dict)
-            or not isinstance(native.get('session'), str)
-            or not re.fullmatch(r'[a-f0-9-]{12,64}', native['session'])
-            or not isinstance(native.get('model'), str)
-            or not native['model']
-            or len(policy.users) != 1 or len(policy.channels) != 1
-            or not all(channel.startswith('D') for channel in policy.channels)
-        ):
-            raise ValueError('The Dodaios path requires one owner and one private DM')
+        dm_session = None
+        if native is not None:
+            if not isinstance(native, dict) or not isinstance(native.get('model'), str) or not native['model']:
+                raise ValueError('A configured local Dodaios model is required')
+            dm_session = native.get('session')
+            if policy.users:
+                if (not isinstance(dm_session, str) or not re.fullmatch(r'[a-f0-9-]{12,64}', dm_session)
+                        or len(policy.users) != 1 or len(policy.channels) != 1
+                        or not all(channel.startswith('D') for channel in policy.channels)):
+                    raise ValueError('The Dodaios DM path requires one owner and one private DM')
+            elif dm_session is not None:
+                raise ValueError('A peer-only setup cannot name a DM session')
         peer_session = None
         if policy.peer is not None:
             peer_session = data['peer_exchange'].get('dodaios_session')
             if (native is None or not isinstance(peer_session, str)
                     or not re.fullmatch(r'[a-f0-9-]{12,64}', peer_session)
-                    or peer_session == native['session']):
+                    or peer_session == dm_session):
                 raise ValueError('The peer exchange needs a separate tool-free Dodaios session')
         if args.dry_run:
             print('Slack policy validated offline.')
@@ -468,13 +473,14 @@ def main():
         inbox = Inbox(path)
         if native is not None:
             from integrations.slack.dodaios_chat import DodaiosChat
-            dm_runtime = DodaiosChat(inbox, native['session'], native['model'])
-            runtime = dm_runtime
-            if peer_session is not None:
-                peer_runtime = DodaiosChat(inbox, peer_session, native['model'], peer_only=True)
+            dm_runtime = DodaiosChat(inbox, dm_session, native['model']) if dm_session else None
+            peer_runtime = (
+                DodaiosChat(inbox, peer_session, native['model'], peer_only=True) if peer_session else None
+            )
 
-                def runtime(event):
-                    return peer_runtime(event) if event.get('peer_app') else dm_runtime(event)
+            def runtime(event):
+                route = peer_runtime if event.get('peer_app') else dm_runtime
+                return route(event) if route else {'status': 'denied'}
         else:
             runtime = LocalRuntime(port, key)
         return run_listener(inbox, policy, runtime, app_token, bot_token, key, stop)

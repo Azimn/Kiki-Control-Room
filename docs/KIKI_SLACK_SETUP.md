@@ -72,6 +72,9 @@ session from the owner's DM. The message must start with the Kiki bot mention
 inside that exact private thread. Kiki replies once in the thread and ignores
 the peer's subsequent messages there. Normal DMs and other bots stay separate.
 The peer must read the reply using its own authorized Slack integration.
+For a peer-only installation, set both human allowlists to empty arrays and
+provide only the local `model` in `dodaios_chat`. The peer session and thread
+remain mandatory.
 
 ## Data, approvals and receipts
 
