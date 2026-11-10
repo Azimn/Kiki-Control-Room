@@ -1,11 +1,11 @@
 # Kiki Slack master repair guide
 
-Kiki's Slack bot uses the same local model selected in the regular Dodaios Kiki
-chat. A tracked patch connects the two configured Slack conversations to
-Dodaios's prompt renderer. Their existing tool-free runner writes replies back
-to Slack. The owner DM receives the live Dodaios prompt. The Calibos channel receives
-Kiki's name and persona plus its Slack context. Both configured conversations
-can request shared recall by topic.
+The Slack listener sends messages to the live Dodaios BrainManager, the same
+instance that serves Kiki's desktop chat. It builds the configured identity,
+persona and memory layers and uses the main local model. Slack conversations
+keep their own transcript and support shared recall by topic. The Slack entry
+point can read memory and return a reply. Desktop actions stay on the desktop
+entry point. The listener requires a main-agent receipt before posting.
 
 ## Restore after a Dodaios update
 
@@ -22,13 +22,18 @@ can request shared recall by topic.
    `./integrations/slack/dodaios/Install-KikiSlackPrompt.ps1 -DodaiosPath <editable-checkout>`.
    It checks the source patch against the candidate checkout and stops if the
    hook changed or the installed module contains unrecognized edits. Re-run it after
-   an update that replaces the editable source or after changing Slack session IDs.\n   It reads the Slack policy and writes only the model and session IDs into\n   Dodaios's own checkout, so the desktop process can find them even when\n   Windows redirects Codex's app data. Use `-SlackPolicyPath` to supply the\n   backed-up policy if needed. A packaged release may need
+   an update that replaces the editable source or after changing Slack session IDs.
+   It reads the Slack policy and writes only the model and session IDs into
+   Dodaios's own checkout, so the desktop process can find them even when
+   Windows redirects Codex's app data. Use `-SlackPolicyPath` to supply the
+   backed-up policy if needed. A packaged release may need
    to be run from an editable checkout for this hook to load.
 4. Confirm the Windows account still has its existing files under
    `%LOCALAPPDATA%\KikiSlack`. The Slack policy is `slack.json`. It
-   references two separate Dodaios side session IDs and Kiki's selected local
-   model. Keep the existing Slack installation and DPAPI files under the
-   Windows account that encrypted them. If that account or machine changes,
+   references two distinct Dodaios session IDs used for Slack transport and
+   their transport model. Replies use the main BrainManager's configured local
+   model. Keep the Slack installation and DPAPI files under the Windows account
+   that encrypted them. If that account or machine changes,
    re-enter the credentials securely. The SQLite inbox holds replay and
    delivery receipts. Preserve it across restores and restarts.
 5. Restart Dodaios through its desktop UI. Run the listener with
@@ -45,7 +50,9 @@ can request shared recall by topic.
   written to the shared bridge by this hook.
 - In the private Calibos channel, ask Kiki about recent channel messages.
   Confirm it uses channel context. Then ask `recall Calibos email` and verify
-  it can summarize the matching shared receipt in that channel.
+  it can summarize the matching shared receipt in that channel. Correlate the
+  turn ID with the Dodaios log entry "Kiki main BrainManager completed Slack".
+  A generic side-chat response will be rejected by the listener.
   Check one channel-level mention and one threaded mention. Keep the DM and
   channel session IDs distinct.
 - Restart both processes and repeat the DM and channel checks. Confirm one
@@ -53,9 +60,9 @@ can request shared recall by topic.
 
 ## Rollback and backup
 
-The installer changes one tracked Dodaios file and installs one companion
-module. With the listener idle, run `git apply --reverse --check` against
-`integrations/slack/dodaios/side-chat.patch` from the Dodaios checkout
+The installer patches the main BrainManager, its continuity wrapper, and the
+chat API dispatcher. It also installs the Slack route module. With the listener idle, run `git apply --reverse --check` against
+`integrations/slack/dodaios/main-agent.patch` from the Dodaios checkout
 before reversing the patch with `git apply --reverse`. Restart Dodaios
 normally. Keep the Slack inbox and DPAPI files in place. After an upstream
 upgrade, switching back to the prior working checkout is safer than replacing

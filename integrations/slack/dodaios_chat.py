@@ -1,4 +1,4 @@
-"""Bridge an authorized Slack exchange to an existing tool-free Dodaios chat."""
+"""Bridge an authorized Slack exchange to an live main Dodaios agent."""
 import hashlib
 import json
 from urllib.error import HTTPError
@@ -98,7 +98,7 @@ def read_turn(events, turn):
     result = next((e['payload'] for e in own_events if e['kind'] == 'turn_finished'), None)
     if not result:
         return {'status': 'queued'}
-    if result.get('status') != 'done':
+    if result.get('status') != 'done' or result.get('runtime') != 'dodaios-main-brain-v1':
         return {'status': 'denied'}
     reply = next((e['payload'].get('text') for e in reversed(own_events)
                   if e['kind'] == 'assistant_text'), None)

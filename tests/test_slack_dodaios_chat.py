@@ -27,7 +27,7 @@ class DodaiosChatTests(unittest.TestCase):
     def test_submits_once_and_replays_result(self):
         complete = timeline(
             ('assistant_text', {'turn_id': 'one', 'text': 'synthetic reply'}),
-            ('turn_finished', {'turn_id': 'one', 'status': 'done'}),
+            ('turn_finished', {'turn_id': 'one', 'status': 'done', 'runtime': 'dodaios-main-brain-v1'}),
         )
         self.runtime.request = Mock(side_effect=[timeline(), {'turn_id': 'one'}, complete, complete])
         self.assertEqual(self.runtime(EVENT), {'status': 'queued'})
@@ -54,12 +54,20 @@ class DodaiosChatTests(unittest.TestCase):
             ('user_message', {'text': f'Slack message ({digest})\nsynthetic test'}),
             ('turn_started', {'turn_id': 'one'}),
             ('assistant_text', {'turn_id': 'one', 'text': 'synthetic reply'}),
-            ('turn_finished', {'turn_id': 'one', 'status': 'done'}),
+            ('turn_finished', {'turn_id': 'one', 'status': 'done', 'runtime': 'dodaios-main-brain-v1'}),
         )
         self.runtime.request = Mock(side_effect=[timeline(), TimeoutError(), recovered])
         self.assertEqual(self.runtime(EVENT), {'status': 'unavailable'})
         self.assertEqual(self.runtime(EVENT), {'status': 'ready', 'reply': 'synthetic reply'})
         self.assertEqual(sum(call.args[0] == '/messages' for call in self.runtime.request.call_args_list), 1)
+
+    def test_legacy_reply_cannot_be_posted(self):
+        self.inbox.set_native_turn('TTEST:EvTEST', None, 'one')
+        self.runtime.request = Mock(return_value=timeline(
+            ('assistant_text', {'turn_id': 'one', 'text': 'generic reply'}),
+            ('turn_finished', {'turn_id': 'one', 'status': 'done'}),
+        ))
+        self.assertEqual(self.runtime(EVENT), {'status': 'denied'})
 
     def test_tool_enabled_surface_and_tool_events_fail_closed(self):
         self.runtime.request = Mock(return_value=timeline(surface='jarvis'))
