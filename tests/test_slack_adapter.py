@@ -74,6 +74,24 @@ class SlackTests(unittest.TestCase):
                 client.send_socket_mode_response.assert_called_once()
         self.web.assert_not_called()
 
+    def test_peer_exchange_requires_verified_bot_private_thread_and_admits_once(self):
+        policy = bot.Policy(POLICY.team, POLICY.app, POLICY.bot, POLICY.bot_user, POLICY.users,
+                            POLICY.channels, ('ACALIBOS', 'BCALIBOS', 'UCALIBOS', 'CTEST', TS))
+        payload = envelope(user='UCALIBOS', channel='CTEST', channel_type='group',
+                           bot_id='BCALIBOS', app_id='ACALIBOS', subtype='bot_message',
+                           thread_ts=TS, text='<@UBOT> synthetic request')
+        event = policy.event(payload)
+        self.assertEqual(event['text'], 'synthetic request')
+        self.assertTrue(policy.allows_delivery(event))
+        self.assertFalse(POLICY.allows_delivery(event))
+        for field, bad in [('bot_id', 'BOTHER'), ('app_id', 'AOTHER'), ('user', 'UOTHER'),
+                           ('channel_type', 'channel'), ('thread_ts', REPLY_TS), ('text', 'no mention')]:
+            candidate = {**payload, 'event': {**payload['event'], field: bad}}
+            self.assertIsNone(policy.event(candidate))
+        self.assertTrue(self.inbox.admit(event))
+        self.assertTrue(self.inbox.admit({**event, 'event': 'EvFOLLOWUP'}))
+        self.assertEqual(self.inbox.status(), {'pending': 1})
+
     def test_ack_after_durable_commit_and_replay(self):
         def committed(response):
             self.assertEqual(response['envelope_id'], 'envelope-1')

@@ -41,6 +41,38 @@ Invoke-RestMethod http://127.0.0.1:8766/health
 
 Run the health command from a second shell. The listener acquires port 8766 exclusively before connecting. It backs off on initial connection failure and delegates active socket reconnection to the Slack SDK. Use Ctrl+C to stop the listener. For unattended operation, use one opt-in Windows scheduled task under the owner account, with the repository as working directory, the same private launcher, and **Do not start a new instance**. Keep the Telegram listener under its existing manager. Use the localhost health endpoint for status and leave it unforwarded.
 
+## Optional direct Dodaios DM
+
+If the Windows host already runs Dodaios with Kiki's local Ollama model, the
+listener can route one owner's Slack DM to a dedicated tool-free Dodaios side
+conversation. Create the side conversation with the same local provider and
+model as the existing Kiki session, and add a private configuration entry
+`"dodaios_chat": {"session": "<existing side chat id>", "model": "<exact local model>"}`.
+Use exactly one owner and one DM in the allowlists. The adapter verifies the
+side-chat surface and configured Ollama model against the local API on every
+poll. The session should be reserved for this DM. Slack remains a user message
+and any reported tool use prevents a reply.
+
+Dodaios owns this conversation's text and native reply. The Slack spool stores
+the delivery receipt and native turn reference. This mode does not start the
+Control Room worker or send to its task queue. The regular Control Room path
+above remains available when that runtime is configured. A direct Dodaios DM
+has its own thread history in Dodaios. The local test does not establish
+cross-surface memory continuity or live Slack delivery.
+
+## Optional single peer exchange
+
+For two separately installed Slack bots, use one private test channel and one
+owner-selected thread. If the operator adds the `groups:history` scope and
+`message.groups` subscription to Kiki, Kiki can accept an explicitly addressed
+request from one verified peer bot. Set the private `peer_exchange` entry with
+`app_id`, `bot_id`, `bot_user_id`, `channel`, `thread_ts`, and `dodaios_session`.
+Use the peer's actual Slack bot identity and a different tool-free Dodaios side
+session from the owner's DM. The message must start with the Kiki bot mention
+inside that exact private thread. Kiki replies once in the thread and ignores
+the peer's subsequent messages there. Normal DMs and other bots stay separate.
+The peer must read the reply using its own authorized Slack integration.
+
 ## Data, approvals and receipts
 
 - The private transport spool deduplicates by Slack team and event ID before acknowledgement. The Control Room's existing SQLite conversation table independently deduplicates the same event and records source `slack`, app, bot, user, channel, timestamp and thread. Completed Slack turns are excluded from hosted sync and other model surfaces. The local receipt reports `remote_text: unavailable`. The current hosted route has no verified Slack receipt contract, so the adapter sends neither content nor metadata to it.

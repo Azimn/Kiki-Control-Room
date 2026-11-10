@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
 import os
+import re
 from pathlib import Path
 import sqlite3
 import socket as net_socket
@@ -29,6 +30,7 @@ class Policy:
     bot_user: str
     users: frozenset
     channels: frozenset
+    peer: tuple | None = None
 
     @classmethod
     def load(cls, data):
@@ -43,12 +45,49 @@ class Policy:
                 raise ValueError('Slack allowlists must be nonempty lists')
             return frozenset(ident(value, prefix) for value in values)
 
-        return cls(ident(data['team_id'], 'T'), ident(data['app_id'], 'A'),
-                   ident(data['bot_id'], 'B'), ident(data['bot_user_id'], 'U'),
-                   allowlist('allowed_users', ('U', 'W')), allowlist('allowed_channels', ('D', 'C', 'G')))
+        app = ident(data['app_id'], 'A')
+        bot = ident(data['bot_id'], 'B')
+        bot_user = ident(data['bot_user_id'], 'U')
+        peer_data = data.get('peer_exchange')
+        peer = None
+        if peer_data is not None:
+            if not isinstance(peer_data, dict) or not TS.fullmatch(peer_data.get('thread_ts', '')):
+                raise ValueError('The peer exchange requires a specific private Slack thread')
+            peer = (ident(peer_data['app_id'], 'A'), ident(peer_data['bot_id'], 'B'),
+                    ident(peer_data['bot_user_id'], 'U'), ident(peer_data['channel'], ('C', 'G')),
+                    peer_data['thread_ts'])
+            if any(own == other for own, other in zip((app, bot, bot_user), peer[:3])):
+                raise ValueError('A Slack bot cannot be its own peer')
+        return cls(ident(data['team_id'], 'T'), app, bot, bot_user,
+                   allowlist('allowed_users', ('U', 'W')), allowlist('allowed_channels', ('D', 'C', 'G')), peer)
 
     def allows(self, channel, user):
         return isinstance(channel, str) and channel in self.channels and isinstance(user, str) and user in self.users
+
+    def allows_delivery(self, event):
+        if event.get('peer_app'):
+            return self.peer == (event['peer_app'], event['peer_bot'], event['user'],
+                                 event['channel'], event['thread_ts'])
+        return self.allows(event['channel'], event['user']) and event['user'] != self.bot_user
+
+    def peer_event(self, event):
+        if not self.peer or event.get('type') != 'message' or event.get('channel_type') != 'group':
+            return None
+        if event.get('subtype') not in (None, 'bot_message') or event.get('edited'):
+            return None
+        profile = event.get('bot_profile')
+        profile_app = profile.get('app_id') if isinstance(profile, dict) else None
+        app, bot, user, channel, thread = self.peer
+        if (event.get('app_id', profile_app), event.get('bot_id'), event.get('channel'),
+                event.get('thread_ts')) != (app, bot, channel, thread):
+            return None
+        if event.get('user', user) != user or (profile_app and profile_app != app):
+            return None
+        text = event.get('text')
+        mention = f'<@{self.bot_user}>'
+        if not isinstance(text, str) or len(text) > 2000 or not text.startswith(mention + ' '):
+            return None
+        return app, bot, user, text[len(mention):].strip()
 
     def event(self, payload, secrets=()):
         if not isinstance(payload, dict) or payload.get('type') != 'event_callback':
@@ -66,23 +105,32 @@ class Policy:
         ):
             return None
         event = payload.get('event')
-        if not isinstance(event, dict) or any(key in event for key in ('subtype', 'bot_id', 'bot_profile', 'app_id', 'edited')):
+        if not isinstance(event, dict):
             return None
         if event.get('team', self.team) != self.team or event.get('user_team', self.team) != self.team:
             return None
-        channel, user = event.get('channel'), event.get('user')
-        if not self.allows(channel, user) or user == self.bot_user:
-            return None
-        text = event.get('text')
-        if not isinstance(text, str) or len(text) > 2000:
-            return None
-        if event.get('type') == 'app_mention' and channel.startswith(('C', 'G')):
-            mention = f'<@{self.bot_user}>'
-            if mention not in text:
+        channel = event.get('channel')
+        peer = self.peer_event(event)
+        peer_fields = {}
+        if peer:
+            peer_app, peer_bot, user, text = peer
+            peer_fields = {'peer_app': peer_app, 'peer_bot': peer_bot}
+        else:
+            if any(key in event for key in ('subtype', 'bot_id', 'bot_profile', 'app_id', 'edited')):
                 return None
-            text = text.replace(mention, '', 1)
-        elif not (event.get('type') == 'message' and channel.startswith('D') and event.get('channel_type') == 'im'):
-            return None
+            channel, user = event.get('channel'), event.get('user')
+            if not self.allows(channel, user) or user == self.bot_user:
+                return None
+            text = event.get('text')
+            if not isinstance(text, str) or len(text) > 2000:
+                return None
+            if event.get('type') == 'app_mention' and channel.startswith(('C', 'G')):
+                mention = f'<@{self.bot_user}>'
+                if mention not in text:
+                    return None
+                text = text.replace(mention, '', 1)
+            elif not (event.get('type') == 'message' and channel.startswith('D') and event.get('channel_type') == 'im'):
+                return None
         event_id, ts, thread_ts = payload.get('event_id'), event.get('ts'), event.get('thread_ts', '')
         if not all(isinstance(item, str) for item in (event_id, ts, thread_ts)):
             return None
@@ -92,7 +140,7 @@ class Policy:
             return None
         return {'team': self.team, 'event': event_id, 'channel': channel, 'user': user,
                 'ts': ts, 'thread_ts': thread_ts, 'text': redact(text.strip(), *secrets),
-                'app': self.app, 'bot': self.bot}
+                'app': self.app, 'bot': self.bot, **peer_fields}
 
 
 class Inbox:
@@ -105,6 +153,23 @@ class Inbox:
                 id TEXT PRIMARY KEY, body TEXT, status TEXT NOT NULL,
                 due REAL NOT NULL DEFAULT 0, accepted_ts TEXT
             )''')
+            columns = {row[1] for row in db.execute('PRAGMA table_info(slack_inbox)')}
+            if 'native_turn' not in columns:
+                db.execute('ALTER TABLE slack_inbox ADD COLUMN native_turn TEXT')
+            if 'peer_slot' not in columns:
+                db.execute('ALTER TABLE slack_inbox ADD COLUMN peer_slot TEXT')
+            db.execute('CREATE UNIQUE INDEX IF NOT EXISTS slack_peer_slot ON slack_inbox(peer_slot)')
+
+    def native_turn(self, ident):
+        with closing(self.connect()) as db:
+            return db.execute('SELECT native_turn FROM slack_inbox WHERE id=?', (ident,)).fetchone()[0]
+
+    def set_native_turn(self, ident, previous, value):
+        with closing(self.connect()) as db, db:
+            return db.execute(
+                'UPDATE slack_inbox SET native_turn=? WHERE id=? AND native_turn IS ?',
+                (value, ident, previous),
+            ).rowcount == 1
 
     def connect(self):
         db = sqlite3.connect(self.path, timeout=0.25, isolation_level='IMMEDIATE')
@@ -117,10 +182,16 @@ class Inbox:
             db.execute('BEGIN IMMEDIATE')
             if db.execute('SELECT 1 FROM slack_inbox WHERE id=?', (ident,)).fetchone():
                 return True
+            slot = None
+            if event.get('peer_app'):
+                slot = f"{event['team']}:{event['channel']}:{event['thread_ts']}"
+                if db.execute('SELECT 1 FROM slack_inbox WHERE peer_slot=?', (slot,)).fetchone():
+                    return True
             count = db.execute("SELECT count(*) FROM slack_inbox WHERE status IN ('pending','rate_limited')").fetchone()[0]
             if count >= MAX_PENDING:
                 return False
-            db.execute("INSERT INTO slack_inbox(id,body,status) VALUES(?,?,'pending')", (ident, json.dumps(event)))
+            db.execute("INSERT INTO slack_inbox(id,body,peer_slot,status) VALUES(?,?,?,'pending')",
+                       (ident, json.dumps(event), slot))
         return True
 
     def next(self, now):
@@ -202,7 +273,7 @@ def deliver(inbox, policy, runtime, web, secrets, row, now, stop):
     ident, previous = row['id'], row['status']
     event = json.loads(row['body'])
     if (event['team'] != policy.team or event['app'] != policy.app or event['bot'] != policy.bot
-            or not policy.allows(event['channel'], event['user']) or event['user'] == policy.bot_user):
+            or not policy.allows_delivery(event)):
         inbox.update(ident, previous, 'denied')
         return
     result = runtime(event)
@@ -366,6 +437,24 @@ def main():
         port = data.get('runtime_port', 8765)
         if type(port) is not int or not 1 <= port <= 65535 or port == HEALTH_PORT:
             raise ValueError('Invalid runtime port')
+        native = data.get('dodaios_chat')
+        if native is not None and (
+            not isinstance(native, dict)
+            or not isinstance(native.get('session'), str)
+            or not re.fullmatch(r'[a-f0-9-]{12,64}', native['session'])
+            or not isinstance(native.get('model'), str)
+            or not native['model']
+            or len(policy.users) != 1 or len(policy.channels) != 1
+            or not all(channel.startswith('D') for channel in policy.channels)
+        ):
+            raise ValueError('The Dodaios path requires one owner and one private DM')
+        peer_session = None
+        if policy.peer is not None:
+            peer_session = data['peer_exchange'].get('dodaios_session')
+            if (native is None or not isinstance(peer_session, str)
+                    or not re.fullmatch(r'[a-f0-9-]{12,64}', peer_session)
+                    or peer_session == native['session']):
+                raise ValueError('The peer exchange needs a separate tool-free Dodaios session')
         if args.dry_run:
             print('Slack policy validated offline.')
             return 0
@@ -376,7 +465,19 @@ def main():
             raise ValueError('Invalid Slack credential configuration')
         path = args.config.resolve().parent / 'slack-inbox.sqlite3'
         stop = threading.Event()
-        return run_listener(Inbox(path), policy, LocalRuntime(port, key), app_token, bot_token, key, stop)
+        inbox = Inbox(path)
+        if native is not None:
+            from integrations.slack.dodaios_chat import DodaiosChat
+            dm_runtime = DodaiosChat(inbox, native['session'], native['model'])
+            runtime = dm_runtime
+            if peer_session is not None:
+                peer_runtime = DodaiosChat(inbox, peer_session, native['model'], peer_only=True)
+
+                def runtime(event):
+                    return peer_runtime(event) if event.get('peer_app') else dm_runtime(event)
+        else:
+            runtime = LocalRuntime(port, key)
+        return run_listener(inbox, policy, runtime, app_token, bot_token, key, stop)
     except KeyboardInterrupt:
         return 0
     except (ImportError, OSError, ValueError, AttributeError, TypeError, KeyError, sqlite3.Error):
