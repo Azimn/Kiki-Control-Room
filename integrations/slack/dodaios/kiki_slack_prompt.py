@@ -80,7 +80,7 @@ async def _recall(query):
             return "The shared memory bridge responded, but no matching receipts were available for this topic."
         return (
             "The shared Kiki memory bridge was read successfully. Use relevant saved conversation "
-            "receipts as evidence of prior discussion. Summarize findings for the owner; avoid quoting "
+            "receipts as evidence of prior discussion. Summarize findings for the current Slack conversation; avoid quoting "
             "private email or disclosing third-party personal details. Say if these receipts do not "
             "answer the question. Saved conversation receipts:\n" + json.dumps(selected, ensure_ascii=False)
         )
@@ -100,17 +100,26 @@ async def slack_system_prompt(session, user_text):
     config = getattr(brain, "_config", None)
     soul_path = getattr(getattr(brain, "_soul", None), "path", None)
     persona = identity_block(config, path=soul_path) + "\n\n" + load_effective_persona_prompt()
+    message = user_text[match.end():]
     if scope == "channel":
-        return persona + "\n\n" + _SCOPE + (
-            " This is the shared channel with Calibos. Use the channel context supplied by the bridge. "
-            "The owner's private memories, personal profile and other chats are outside this conversation."
+        prompt = persona + (
+            "\n\nThis is the shared channel with Calibos. Use the channel context "
+            "supplied by the bridge and shared memory receipts when provided."
         )
-    # Use Dodaios's own live prompt with a blank wiki query. A Slack message
-    # only reaches the hosted memory bridge when the owner explicitly asks.
-    prompt, _ = await brain.render_surface_prompt(user_text="")
-    query = _RECALL.fullmatch(user_text[match.end():].strip())
+        # The adapter places the actual incoming text in its final JSON line.
+        # Match that text only, never historical context or transport instructions.
+        try:
+            payload = json.loads(message.rsplit("\n", 1)[-1])
+            message = payload["message"] if payload.get("source") == "slack" else ""
+        except (ValueError, TypeError, KeyError, AttributeError):
+            message = ""
+    else:
+        # Render the live prompt with a blank wiki query so that only the
+        # explicitly requested recall topic goes to the hosted bridge.
+        prompt, _ = await brain.render_surface_prompt(user_text="")
+    query = _RECALL.fullmatch(message.strip()) if isinstance(message, str) else None
     recall = await _recall(query[1].strip()) if query else (
-        "This private DM can look up shared memory when the owner asks "
-        "'recall TOPIC' or 'what do you remember about TOPIC?'."
+        "Shared memory is available in this Slack conversation on explicit request. "
+        "Use 'recall TOPIC' or 'what do you remember about TOPIC?'."
     )
     return prompt + "\n\n" + _SCOPE + "\n\n" + recall

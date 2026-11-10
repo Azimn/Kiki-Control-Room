@@ -24,12 +24,18 @@ if ($LASTEXITCODE -ne 0) {
     }
     $patchState = 'already applied'
 }
-if (Test-Path -LiteralPath $target) {
-    if ((Get-FileHash -LiteralPath $target).Hash -cne (Get-FileHash -LiteralPath $source).Hash) {
-        throw 'A different Kiki Slack prompt module exists. Back it up and review the difference before replacing it.'
+$install = !(Test-Path -LiteralPath $target)
+if (!$install) {
+    $installedHash = (Get-FileHash -LiteralPath $target).Hash
+    if ($installedHash -cne (Get-FileHash -LiteralPath $source).Hash) {
+        if ($installedHash -cne '497A3E0D9967079678F09DE94E0D524F7FD35D9F5B65B3DADD185B6EC73B7EE9') {
+            throw 'A locally modified Kiki Slack prompt module exists. Review it before replacing it.'
+        }
+        $install = $true
     }
-} else {
-    Copy-Item -LiteralPath $source -Destination $target
+}
+if ($install) {
+    Copy-Item -LiteralPath $source -Destination $target -Force
 }
 if ($patchState -eq 'apply') {
     & git -C $checkout apply $patch

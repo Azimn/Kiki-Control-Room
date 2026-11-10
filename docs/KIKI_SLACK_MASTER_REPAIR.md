@@ -3,10 +3,9 @@
 Kiki's Slack bot uses the same local model selected in the regular Dodaios Kiki
 chat. A tracked patch connects the two configured Slack conversations to
 Dodaios's prompt renderer. Their existing tool-free runner writes replies back
-to Slack. The owner DM receives the live Dodaios prompt and can request shared
-memory by topic. The Calibos channel receives Kiki's name and persona plus its
-own Slack context. The channel route excludes the owner's profile and shared
-recall.
+to Slack. The owner DM receives the live Dodaios prompt. The Calibos channel receives
+Kiki's name and persona plus its Slack context. Both configured conversations
+can request shared recall by topic.
 
 ## Restore after a Dodaios update
 
@@ -22,7 +21,7 @@ recall.
 3. From the Kiki Control Room checkout, run
    `./integrations/slack/dodaios/Install-KikiSlackPrompt.ps1 -DodaiosPath <editable-checkout>`.
    It checks the source patch against the candidate checkout and stops if the
-   hook changed or a different module is already installed. Re-run it after
+   hook changed or the installed module contains unrecognized edits. Re-run it after
    an update that replaces the editable source. A packaged release may need
    to be run from an editable checkout for this hook to load.
 4. Confirm the Windows account still has its existing files under
@@ -45,7 +44,8 @@ recall.
   lookup sends the topic to the existing memory bridge. Slack turns are not
   written to the shared bridge by this hook.
 - In the private Calibos channel, ask Kiki about recent channel messages.
-  Confirm it uses channel context and does not retrieve private memories.
+  Confirm it uses channel context. Then ask `recall Calibos email` and verify
+  it can summarize the matching shared receipt in that channel.
   Check one channel-level mention and one threaded mention. Keep the DM and
   channel session IDs distinct.
 - Restart both processes and repeat the DM and channel checks. Confirm one
