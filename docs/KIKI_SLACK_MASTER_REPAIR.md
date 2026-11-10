@@ -22,7 +22,7 @@ can request shared recall by topic.
    `./integrations/slack/dodaios/Install-KikiSlackPrompt.ps1 -DodaiosPath <editable-checkout>`.
    It checks the source patch against the candidate checkout and stops if the
    hook changed or the installed module contains unrecognized edits. Re-run it after
-   an update that replaces the editable source. A packaged release may need
+   an update that replaces the editable source or after changing Slack session IDs.\n   It reads the Slack policy and writes only the model and session IDs into\n   Dodaios's own checkout, so the desktop process can find them even when\n   Windows redirects Codex's app data. Use `-SlackPolicyPath` to supply the\n   backed-up policy if needed. A packaged release may need
    to be run from an editable checkout for this hook to load.
 4. Confirm the Windows account still has its existing files under
    `%LOCALAPPDATA%\KikiSlack`. The Slack policy is `slack.json`. It

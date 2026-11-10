@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import re
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from dodaios.brain.persona_loader import load_effective_persona_prompt
 from dodaios.core.runtime_refs import get_brain_manager
 
 log = logging.getLogger(__name__)
+_BINDING = Path(__file__).resolve().parents[2] / "integrations/kiki-continuity/slack-sessions.json"
 _SLACK_TURN = re.compile(r"Slack message \([a-f0-9]{64}\)\n")
 _RECALL = re.compile(
     r"(?:recall[: ]+|(?:what|do you) (?:do you )?remember (?:about )?)([a-z0-9][a-z0-9 '&-]{0,119})[?.!]*",
@@ -32,24 +32,17 @@ _SCOPE = (
 
 
 def _slack_scope(session):
-    root = os.getenv("LOCALAPPDATA")
-    if not root or getattr(session, "surface", None) != "side":
+    if getattr(session, "surface", None) != "side":
         return None
     try:
-        data = json.loads((Path(root) / "KikiSlack" / "slack.json").read_text(encoding="utf-8-sig"))
-        native = data.get("dodaios_chat") or {}
-        peer = data.get("peer_exchange") or {}
-        dm_session, channel_session = native.get("session"), peer.get("dodaios_session")
-        if not session.session_id or session.model != native.get("model") or session.provider != "ollama":
+        data = json.loads(_BINDING.read_text(encoding="utf-8-sig"))
+        if session.provider != "ollama" or session.model != data["model"]:
             return None
-        if dm_session and dm_session != channel_session and session.session_id == dm_session:
-            if (len(data["allowed_users"]) == 1 and len(data["allowed_channels"]) == 1
-                    and data["allowed_channels"][0].startswith("D")):
-                return "dm"
-        if channel_session and dm_session != channel_session and session.session_id == channel_session:
-            return "channel"
+        for scope in ("dm", "channel"):
+            if data.get(scope) and session.session_id == data[scope]:
+                return scope
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
-        pass
+        log.warning("Kiki Slack session binding unavailable")
     return None
 
 
@@ -90,10 +83,13 @@ async def _recall(query):
 
 
 async def slack_system_prompt(session, user_text):
-    scope = _slack_scope(session)
     match = _SLACK_TURN.match(user_text)
-    if scope is None or match is None:
+    if match is None:
         return None
+    scope = _slack_scope(session)
+    if scope is None:
+        raise RuntimeError("Kiki's Slack session binding is unavailable or mismatched")
+    log.info("Kiki Slack canonical prompt selected for %s", scope)
     brain = get_brain_manager()
     if brain is None:
         raise RuntimeError("Kiki's Dodaios configuration is still loading")
