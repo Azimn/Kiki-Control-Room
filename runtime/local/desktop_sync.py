@@ -40,7 +40,7 @@ class DesktopSync:
                 if saved: receipt['queue_result']=json.loads(saved[0])
             dialogues=[]
             if app.agent:
-                for r in app.conn.execute("SELECT * FROM agent_jobs WHERE status='done' AND cloud_ack=0 LIMIT 30"):
+                for r in app.conn.execute("SELECT * FROM agent_jobs WHERE status='done' AND cloud_ack=0 AND source!='slack' LIMIT 30"):
                     if json.loads(r['payload']).get('integration_test'):
                         continue
                     if r['source']=='web':

@@ -1,0 +1,10 @@
+--- a/dodaios/agentic_ide/side_chat.py
++++ b/dodaios/agentic_ide/side_chat.py
+@@ -21,2 +21,7 @@
+     """The side chat's whole system prompt. The same for every turn and folder."""
++    from dodaios.agentic_ide.kiki_slack_prompt import slack_system_prompt
++
++    prompt = await slack_system_prompt(_session, _user_text)
++    if prompt is not None:
++        return prompt
+     return _INSTRUCTIONS.format(name=assistant_name or "the assistant")

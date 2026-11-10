@@ -1,0 +1,52 @@
+--- a/dodaios/brain/manager.py
++++ b/dodaios/brain/manager.py
+@@ -10401,6 +10401,7 @@
+         consume_pending_voice_attachments: bool = False,
+         turn_override: TurnOverride | None = None,
+         language_text: str | None = None,
++        external_reply_context: str | None = None,
+     ) -> str:
+         """Generate a turn, optionally leaving its public response event to the caller.
+
+@@ -10417,6 +10418,14 @@
+         ``user_text`` is not the person's own words (an internal "continue"
+         prompt): ``""`` keeps the conversation's language unchanged.
+         """
++        if external_reply_context is not None:
++            # External conversation turns use this live manager's identity and
++            # provider. They cannot enter the desktop command or tool path.
++            from dodaios.agentic_ide.kiki_slack_prompt import generate_external_reply
++
++            return await generate_external_reply(
++                self, user_text, external_reply_context, tuple(history_override or ()),
++            )
+         token = _PUBLISH_RESPONSE_EVENT.set(bool(publish_response))
+         history_token = _TURN_HISTORY_OVERRIDE.set(
+             tuple(history_override) if history_override is not None else None
+--- a/dodaios/brain/kiki_continuity.py
++++ b/dodaios/brain/kiki_continuity.py
+@@ -42,6 +42,9 @@
+     """Wrap the real conversational entry point, including early responses."""
+     @wraps(generate)
+     async def connected(self, user_text, **kwargs):
++        if kwargs.get("external_reply_context") is not None:
++            # The authorized Slack route supplies its own scoped read context.
++            return await generate(self, user_text, **kwargs)
+         source = kwargs.get("source_layer")
+         from dodaios.brain.web_session import SESSION, command, voice_override
+         from dodaios.core.protocols import BrainMessage, ExecutionContext
+--- a/dodaios/agent_chat/runner_api.py
++++ b/dodaios/agent_chat/runner_api.py
+@@ -309,6 +309,12 @@
+     effort = normalize_effort(provider, session.effort)
+     t0 = time.perf_counter()
+     usage_total: dict[str, int] = {}
++
++    if session.surface == "side" and user_text.startswith("Slack message ("):
++        from dodaios.agentic_ide.kiki_slack_prompt import run_slack_turn
++
++        await run_slack_turn(handle, user_text)
++        return
+
+     try:
+         brain = build_brain(provider, session.model)
