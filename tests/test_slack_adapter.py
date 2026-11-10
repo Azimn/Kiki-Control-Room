@@ -92,6 +92,28 @@ class SlackTests(unittest.TestCase):
         self.assertTrue(self.inbox.admit({**event, 'event': 'EvFOLLOWUP'}))
         self.assertEqual(self.inbox.status(), {'pending': 1})
 
+    def test_private_channel_allows_owner_mentions_and_one_calibos_reply_per_thread(self):
+        policy = bot.Policy(POLICY.team, POLICY.app, POLICY.bot, POLICY.bot_user, POLICY.users,
+                            POLICY.channels, ('ACALIBOS', 'BCALIBOS', 'UCALIBOS', 'CTEST', ''))
+        owner = envelope(channel='CTEST', channel_type='group', text='Hi <@UBOT> can you reply?')
+        event = policy.event(owner)
+        self.assertTrue(event['channel_chat'])
+        self.assertNotIn('peer_app', event)
+        self.assertTrue(policy.allows_delivery(event))
+        for change in ({'channel': 'COTHER'}, {'channel_type': 'channel'},
+                       {'user': 'USTRANGER'}, {'text': 'ambient channel traffic'}):
+            invalid = {**owner, 'event': {**owner['event'], **change}}
+            self.assertIsNone(policy.event(invalid))
+        calibos = envelope(channel='CTEST', channel_type='group', user='UCALIBOS',
+                           bot_id='BCALIBOS', bot_profile={'app_id': 'ACALIBOS'},
+                           text='<@UBOT> synthetic request')
+        self.assertIsNone(policy.event({**calibos, 'event': {**calibos['event'], 'text': 'I am online'}}))
+        top = policy.event(calibos)
+        self.assertEqual(top['thread_ts'], '')
+        self.assertTrue(self.inbox.admit(top))
+        self.assertTrue(self.inbox.admit({**top, 'event': 'EvAGAIN', 'ts': REPLY_TS, 'thread_ts': TS}))
+        self.assertEqual(self.inbox.status(), {'pending': 1})
+
     def test_ack_after_durable_commit_and_replay(self):
         def committed(response):
             self.assertEqual(response['envelope_id'], 'envelope-1')

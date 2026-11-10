@@ -60,21 +60,22 @@ above remains available when that runtime is configured. A direct Dodaios DM
 has its own thread history in Dodaios. The local test does not establish
 cross-surface memory continuity or live Slack delivery.
 
-## Optional single peer exchange
+## Optional private-channel exchange
 
-For two separately installed Slack bots, use one private test channel and one
-owner-selected thread. If the operator adds the `groups:history` scope and
-`message.groups` subscription to Kiki, Kiki can accept an explicitly addressed
-request from one verified peer bot. Set the private `peer_exchange` entry with
-`app_id`, `bot_id`, `bot_user_id`, `channel`, `thread_ts`, and `dodaios_session`.
-Use the peer's actual Slack bot identity and a different tool-free Dodaios side
-session from the owner's DM. The message must start with the Kiki bot mention
-inside that exact private thread. Kiki replies once in the thread and ignores
-the peer's subsequent messages there. Normal DMs and other bots stay separate.
-The peer must read the reply using its own authorized Slack integration.
+Invite both bot apps to one private test channel and enable the
+`groups:history` scope and `message.groups` event for Kiki. The
+`peer_exchange` policy names the peer `app_id`, `bot_id`, `bot_user_id`,
+private `channel`, and a dedicated tool-free `dodaios_session` separate from
+the owner's DM. The channel ignores ordinary traffic. Kiki replies in thread
+to the allowlisted owner's explicit mentions and to messages that start with
+Kiki's Slack mention from the verified peer bot. The peer can start a new
+thread, and Kiki replies to the peer at most once per thread to prevent loops.
+Set `thread_ts` to limit peer requests to a single selected thread.
+The peer reads the reply through its own authorized Slack integration.
+
 For a peer-only installation, set both human allowlists to empty arrays and
-provide only the local `model` in `dodaios_chat`. The peer session and thread
-remain mandatory.
+provide only the local `model` in `dodaios_chat`. The peer session remains
+mandatory.
 
 ## Data, approvals and receipts
 

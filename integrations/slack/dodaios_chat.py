@@ -14,11 +14,11 @@ class DodaiosChat:
     is resolved against the session timeline before it can produce a reply.
     """
 
-    def __init__(self, inbox, session, model, *, peer_only=False):
+    def __init__(self, inbox, session, model, *, channel_only=False):
         self.inbox = inbox
         self.session = session
         self.model = model
-        self.peer_only = peer_only
+        self.channel_only = channel_only
         self.origin = 'http://127.0.0.1:47821'
         self.url = f'{self.origin}/api/agent-chat/sessions/{session}'
         self.opener = loopback_opener()
@@ -34,9 +34,9 @@ class DodaiosChat:
             return json.load(response)
 
     def __call__(self, event):
-        if bool(event.get('peer_app')) != self.peer_only:
+        if bool(event.get('channel_chat')) != self.channel_only:
             return {'status': 'denied'}
-        if not self.peer_only and not event['channel'].startswith('D'):
+        if not self.channel_only and not event['channel'].startswith('D'):
             return {'status': 'denied'}
         ident = f"{event['team']}:{event['event']}"
         digest = hashlib.sha256(ident.encode()).hexdigest()
