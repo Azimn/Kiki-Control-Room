@@ -18,3 +18,10 @@ Inspect the Actions job and artifact. If failed, read actual failure log and rep
 
 ## Negative findings
 Direct local Hugging Face download was blocked in the prior interactive attempt. Remote Hugging Face Jobs returned HTTP 402, so no inference was executed there. No historical character claim is established by this smoke test.
+
+## Follow-up verification: 2026-11-15 11:03 America/Chicago (17:03 UTC, scheduled checkpoint context)
+- GitHub Actions run 43733093752, job 132869668426: **completed/success**, all six API requests executed, artifact ID 14169581344 uploaded at 2026-11-15T16:09:57Z. Artifact ZIP SHA-256 from GitHub: `a948d568e4132262b17764777dfdde0036ff994732b432d6c3711e637258e40d`. Model GGUF SHA-256 from runner log: `bdde4346e5e0ecc8b679dd6ca43d4e66d85c50227cda5287428d65489fad0c59`.
+- Downloaded artifact ZIP and parsed `jan_edge_results.json` locally. Raw results contain six nonempty replies. **All six finished with `finish_reason=length` at `completion_tokens=220`**, so none establishes a complete final user-facing answer. This is a harness validity failure for character evaluation, not a successful identity test.
+- The model repeatedly exposed self-directed planning prose in the `content` channel despite `chat_template_kwargs.enable_thinking=false`. Some replies include literal `</think>`. The bounded-history case invented a previous favorite-song exchange that was never supplied, which is a negative observation about unsupported autobiographical claims in this specific configuration, not evidence of Kiki's actual history.
+- Critical next action: repair the test harness on this isolated branch to capture distinct reasoning/final fields if available, inspect the model's supported chat template and thinking controls, increase token budget, and assert `finish_reason=stop` plus a complete user-facing answer before evaluating personality. Preserve this failed/limited run as baseline, never promote generated preferences to Kiki's canonical identity.
+- Original 39 conventions and actual Jay-hosted Jan model identifier remain unverified. No production runtime, local canonical SQLite, or private archive was changed.
