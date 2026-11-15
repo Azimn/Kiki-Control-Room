@@ -1,0 +1,50 @@
+diff --git a/lib/desktop-sync.mjs b/lib/desktop-sync.mjs
+index f00cfa9..3d8ebd1 100644
+--- a/lib/desktop-sync.mjs
++++ b/lib/desktop-sync.mjs
+@@ -9,10 +9,12 @@ export async function queueChat(db,owner,turn,text){
+  return {...turn,queued:true};
+ }
+ const ID=/^task-[a-f0-9-]{36}$/;
+-export async function sharedContext(db,owner){
+- const rows=await db.prepare("SELECT ct.turn_id,ae.seq,ae.source_channel,ae.recorded_at,ue.content_json user_json,ae.content_json assistant_json,ue.source_channel user_source,ue.idempotency_key FROM conversation_turns ct JOIN conversation_threads t ON t.thread_id=ct.thread_id JOIN interaction_events ue ON ue.event_id=ct.user_event_id AND ue.thread_id=ct.thread_id JOIN interaction_events ae ON ae.event_id=ct.assistant_event_id AND ae.thread_id=ct.thread_id WHERE t.owner_id=? AND ct.state='committed' AND ue.event_kind='message.user_received' AND ae.event_kind='message.assistant_committed' ORDER BY ae.seq DESC LIMIT 6").bind(owner).all();
+- const turns=rows.results.map(r=>({turn_id:r.turn_id,seq:r.seq,source:r.source_channel,at:r.recorded_at,user:String(JSON.parse(r.user_json).text||'').slice(0,600),assistant:String(JSON.parse(r.assistant_json).text||'').slice(0,600),job_id:r.user_source==='kiki_web'?'chat:'+r.turn_id:['telegram_local','desktop_local'].includes(r.user_source)?r.idempotency_key.slice(owner.length+1):null})).reverse();
+- return {seq:turns.at(-1)?.seq||0,turns};
++export async function sharedContext(db,owner,after=null){
++ if(after!==null&&(!Number.isSafeInteger(after)||after<0))throw Error('Invalid context cursor.');
++ const rows=await db.prepare("SELECT ct.turn_id,ae.seq,ae.source_channel,ae.recorded_at,ue.content_json user_json,ae.content_json assistant_json,ue.source_channel user_source,ue.idempotency_key FROM conversation_turns ct JOIN conversation_threads t ON t.thread_id=ct.thread_id JOIN interaction_events ue ON ue.event_id=ct.user_event_id AND ue.thread_id=ct.thread_id JOIN interaction_events ae ON ae.event_id=ct.assistant_event_id AND ae.thread_id=ct.thread_id WHERE t.owner_id=? AND ct.state='committed' AND ue.event_kind='message.user_received' AND ae.event_kind='message.assistant_committed'"+(after===null?' ORDER BY ae.seq DESC LIMIT 6':' AND ae.seq>? ORDER BY ae.seq ASC LIMIT 100')).bind(...(after===null?[owner]:[owner,after])).all();
++ const turns=rows.results.map(r=>({turn_id:r.turn_id,seq:r.seq,source:r.source_channel,at:r.recorded_at,user:String(JSON.parse(r.user_json).text||'').slice(0,600),assistant:String(JSON.parse(r.assistant_json).text||'').slice(0,600),job_id:r.user_source==='kiki_web'?'chat:'+r.turn_id:['telegram_local','desktop_local'].includes(r.user_source)?r.idempotency_key.slice(owner.length+1):null}));
++ if(after===null)turns.reverse();
++ return {seq:turns.at(-1)?.seq||after||0,turns};
+ }
+ export function equalSecret(a,b){if(typeof a!=='string'||typeof b!=='string'||b.length<32||a.length!==b.length)return false;let n=0;for(let i=0;i<a.length;i++)n|=a.charCodeAt(i)^b.charCodeAt(i);return n===0}
+ export async function linkOwner(db,owner,email,expectedEmail){
+@@ -88,5 +90,5 @@ export async function exchange(db,body,now=new Date().toISOString()){
+  stmts.push(db.prepare('UPDATE desktop_sync SET device_id=COALESCE(device_id,?),last_seen=?,imported=1,snapshot_json=CASE WHEN snapshot_seq<? THEN ? ELSE snapshot_json END,snapshot_seq=MAX(snapshot_seq,?) WHERE owner_id=?').bind(body.device_id,now,body.seq,JSON.stringify(snapshot),body.seq,owner));
+  await db.batch(stmts);
+  const actions=await db.prepare("SELECT request_id,task_id,action,payload_json FROM desktop_actions WHERE owner_id=? AND status='pending' ORDER BY created_at,request_id LIMIT 50").bind(owner).all();
+- return {paired:true,owner_id:owner,actions:actions.results.map(a=>({...a,payload:JSON.parse(a.payload_json)})),acknowledged,context:await sharedContext(db,owner)};
++ return {paired:true,owner_id:owner,actions:actions.results.map(a=>({...a,payload:JSON.parse(a.payload_json)})),acknowledged,context:await sharedContext(db,owner),archive:await sharedContext(db,owner,body.context_after??0)};
+ }
+diff --git a/tests/desktop-sync.test.mjs b/tests/desktop-sync.test.mjs
+index fde4d8f..fd42b88 100644
+--- a/tests/desktop-sync.test.mjs
++++ b/tests/desktop-sync.test.mjs
+@@ -11,6 +11,17 @@ class D1 {
+ }
+ const owner='owner-00001',task='task-11111111-1111-4111-8111-111111111111';
+ const snapshot=(seq,tasks=[])=>({device_id:'22222222-2222-4222-8222-222222222222',seq,snapshot:{tasks},results:[]});
++
++test('archive backfills older owner turns in pages without skipping or exposing other accounts',async()=>{
++ const d=new D1;await linkOwner(d,owner,'o','o');const writer=createKikiToolService(d,'chatgpt');
++ for(let i=0;i<103;i++){const t=await writer.prepareTurn({ownerId:owner},{text:'Historical topic '+i,retry_key:'archive-'+i});await writer.commitTurn({ownerId:owner},{turn_id:t.turn_id,text:'Historical reply '+i})}
++ const foreign=await writer.prepareTurn({ownerId:'another-owner'},{text:'Private foreign topic',retry_key:'foreign-archive'});await writer.commitTurn({ownerId:'another-owner'},{turn_id:foreign.turn_id,text:'Private'});
++ const first=await exchange(d,{...snapshot(1),context_after:0});assert.equal(first.archive.turns.length,100);assert.equal(first.archive.turns[0].user,'Historical topic 0');
++ const next=await sharedContext(d,owner,first.archive.seq);assert.equal(next.turns.length,3);assert.equal(next.turns.at(-1).user,'Historical topic 102');
++ const empty=await sharedContext(d,owner,next.seq);assert.equal(empty.seq,next.seq);assert.equal(empty.turns.length,0);
++ assert.equal((await sharedContext(d,'nobody',0)).turns.length,0);
++ await assert.rejects(sharedContext(d,owner,-1),/cursor/);
++});
+ test('PC receives committed ChatGPT context only for its owner, with bounded text and chronological provenance',async()=>{
+  const d=new D1;await linkOwner(d,owner,'o','o');const writer=createKikiToolService(d,'chatgpt');
+  for(let i=0;i<8;i++){const t=await writer.prepareTurn({ownerId:owner},{text:'User '+i+'x'.repeat(700),retry_key:'context-'+i});await writer.commitTurn({ownerId:owner},{turn_id:t.turn_id,text:'Reply '+i+'y'.repeat(700)})}

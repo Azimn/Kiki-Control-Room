@@ -1,0 +1,17 @@
+{
+  "name": "Kiki Control Room",
+  "short_name": "Kiki",
+  "description": "Your local-first companion for getting one thing done.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#101126",
+  "theme_color": "#101126",
+  "icons": [
+    {
+      "src": "/kiki-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

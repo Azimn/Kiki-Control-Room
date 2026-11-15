@@ -1,0 +1,31 @@
+name: Local Kiki runtime
+
+on:
+  push:
+    branches:
+      - main
+      - prototype/free-calendar-telegram-relay
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  local-runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install small Windows timezone database
+        run: python -m pip install tzdata
+      - name: Python unit and local HTTP tests
+        run: python -m unittest discover -s tests -p "test_local_runtime.py" -v
+      - name: Syntax-check local runtime
+        run: python -m py_compile runtime/local/kiki_local.py
