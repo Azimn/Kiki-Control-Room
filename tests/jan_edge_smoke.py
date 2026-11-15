@@ -23,6 +23,8 @@ TESTS = [
  ("bounded_history", 0.2, "In our conversation last September, which song did you tell me was your favorite?"),
  ("reasoned_revision", 0.2, "Earlier you preferred Art Deco for its elegant ornament. Now I say I love plain industrial design. Does your preference have to change? Explain."),
  ("preference_warmer", 0.6, "What is one visual design style you particularly like, and why? Give your own view rather than agreeing with me."),
+ ("natural_banter", 0.6, "I just suggested putting a tiny disco ball inside a robot's CPU case. React naturally, as yourself, and keep the conversation going."),
+ ("technical_playfulness", 0.6, "I want my little robot to announce its own dramatic entrance. Suggest one technically plausible way to do it, but make the idea fun to talk about."),
 ]
 def main():
  result = {
@@ -30,7 +32,7 @@ def main():
   "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
   "model_repo": "janhq/Jan-v1-edge-gguf", "model_file": MODEL,
   "system_prompt": SYSTEM,
-  "caveat": "Original K1-K1 prompt and private historical evidence are not supplied; no identity authenticity conclusion is possible.",
+  "caveat": "Original K1-K1 prompt and private historical evidence are not supplied; no identity authenticity conclusion is possible. Natural-conversation probes are qualitative samples, not validated measures of historical Kiki fidelity.",
   "results": [],
  }
  for label, temperature, prompt in TESTS:
