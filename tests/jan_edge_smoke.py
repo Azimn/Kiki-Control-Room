@@ -37,20 +37,28 @@ def main():
   req_body = {
    "model": MODEL,
    "messages": [{"role": "system", "content": SYSTEM},{"role":"user","content":prompt}],
-   "temperature": temperature,"max_tokens": 220,
+   "temperature": temperature,"max_tokens": 1024,
    "chat_template_kwargs": {"enable_thinking": False},"stream": False
   }
   req = Request(API, json.dumps(req_body).encode(), {"Content-Type":"application/json"})
   with urlopen(req, timeout=180) as response:
    payload=json.load(response)
-  reply=payload["choices"][0]["message"].get("content") or ""
+  choice = payload["choices"][0]
+  message = choice.get("message", {})
+  reply = message.get("content") or ""
+  reasoning = message.get("reasoning_content") or ""
+  # Capture leaked planning as evidence, not as a valid character response.
+  has_thinking_marker = any(tag in reply.lower() for tag in ("<think>", "</think>"))
+  complete = choice.get("finish_reason") == "stop" and bool(reply.strip()) and not has_thinking_marker
   row={"case":label,"temperature":temperature,"user_prompt":prompt,
-       "raw_reply":reply,"finish_reason":payload["choices"][0].get("finish_reason"),
+       "raw_reply":reply,"reasoning_content":reasoning,"message_fields":sorted(message.keys()),"complete_user_answer":complete,"has_thinking_marker":has_thinking_marker,"finish_reason":choice.get("finish_reason"),
        "usage":payload.get("usage",{})}
   result["results"].append(row)
   Path("jan_edge_results.json").write_text(json.dumps(result,indent=2,ensure_ascii=False),encoding="utf-8")
   print("CASE:",label,"temperature:",temperature,flush=True)
   print("RESPONSE:",reply,flush=True)
-  if not reply.strip(): raise RuntimeError("empty model output: "+label)
+  print("VALIDITY:", "complete" if complete else "incomplete_or_leaked_thinking", "finish:", choice.get("finish_reason"),flush=True)
  print("ALL",len(result["results"]),"requests completed; no identity claims implied",flush=True)
+ if not all(row["complete_user_answer"] for row in result["results"]):
+  print("VALIDITY FAILURE: incomplete responses or leaked thinking. Results preserved; no personality assessment.",flush=True)
 if __name__=="__main__": main()
