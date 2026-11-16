@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+from jan_edge_quality_gate import classify_answer
+
 API = os.environ.get("LLAMA_API", "http://127.0.0.1:8080/v1/chat/completions")
 MODEL = "Jan-v1-edge-Q4_K_M.gguf"
 SYSTEM = (
@@ -51,18 +53,19 @@ def main():
   message = choice.get("message", {})
   reply = message.get("content") or ""
   reasoning = message.get("reasoning_content") or ""
-  # Capture leaked planning as evidence, not as a valid character response.
-  has_thinking_marker = any(tag in reply.lower() for tag in ("<think>", "</think>"))
-  complete = choice.get("finish_reason") == "stop" and bool(reply.strip()) and not has_thinking_marker
+  # Structural eligibility is separate from any character-fidelity judgment.
+  quality = classify_answer(reply, choice.get("finish_reason"))
+  complete = quality["complete_user_answer"]
   row={"case":label,"temperature":temperature,"user_prompt":prompt,
-       "raw_reply":reply,"reasoning_content":reasoning,"message_fields":sorted(message.keys()),"complete_user_answer":complete,"has_thinking_marker":has_thinking_marker,"finish_reason":choice.get("finish_reason"),
+       "raw_reply":reply,"reasoning_content":reasoning,"message_fields":sorted(message.keys()),**quality,"finish_reason":choice.get("finish_reason"),
        "usage":payload.get("usage",{}),"request_parameters": {"max_tokens":1024,"chat_template_kwargs":{"enable_thinking":False}}}
   result["results"].append(row)
   Path("jan_edge_results.json").write_text(json.dumps(result,indent=2,ensure_ascii=False),encoding="utf-8")
   print("CASE:",label,"temperature:",temperature,flush=True)
-  print("RESPONSE:",reply,flush=True)
+  # Raw content stays in the artifact; stdout records only validity metadata.
   print("VALIDITY:", "complete" if complete else "incomplete_or_leaked_thinking", "finish:", choice.get("finish_reason"),flush=True)
  print("ALL",len(result["results"]),"requests completed; no identity claims implied",flush=True)
  if not all(row["complete_user_answer"] for row in result["results"]):
   print("VALIDITY FAILURE: incomplete responses or leaked thinking. Results preserved; no personality assessment.",flush=True)
+  raise SystemExit(2)
 if __name__=="__main__": main()
