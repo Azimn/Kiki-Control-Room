@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Jan response-quality gate
+        run: python3 -m unittest discover -s tests -p 'test_jan_edge_quality_gate.py' -v
       - name: Prepare llama.cpp
         run: |
           sudo apt-get update -qq
