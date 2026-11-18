@@ -1,0 +1,6 @@
+diff --git a/kiki-operations/scheduled-kiki.py b/kiki-operations/scheduled-kiki.py
+--- a/kiki-operations/scheduled-kiki.py
++++ b/kiki-operations/scheduled-kiki.py
+@@ -23 +23 @@
+-                 'KIKI_SITE_URL', 'KIKI_SITE_SERVICE_TOKEN', 'KIKI_SITE_SYNC_KEY', 'KIKI_MODEL_KEY'):
++                 'KIKI_SITE_URL', 'KIKI_SITE_SERVICE_TOKEN', 'KIKI_SITE_SYNC_KEY', 'KIKI_MODEL_KEY', 'KIKI_JAN_URL'):

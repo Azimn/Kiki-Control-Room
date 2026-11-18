@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import uuid
+import os
 from datetime import datetime, timedelta, timezone
 from urllib.request import Request, urlopen
 
@@ -17,6 +18,8 @@ class DesktopSync:
 
     def snapshot(self):
         app = self.app
+        owner = app._get('queue_owner_id')
+        shared_queue = app.queue.projection(owner) if owner else None
         with app.lock, app.conn:
             device = app._get('desktop_device_id')
             if not device:
@@ -32,6 +35,9 @@ class DesktopSync:
                       'snoozed_until': r['snoozed_until']} for r in rows]
             receipts = [dict(r) for r in app.conn.execute(
                 'SELECT request_id,status FROM desktop_receipts WHERE acknowledged=0 ORDER BY rowid LIMIT 170')]
+            for receipt in receipts:
+                saved=app.conn.execute('SELECT result FROM queue_requests WHERE owner=? AND request_id=?',(owner,receipt['request_id'])).fetchone()
+                if saved: receipt['queue_result']=json.loads(saved[0])
             dialogues=[]
             if app.agent:
                 for r in app.conn.execute("SELECT * FROM agent_jobs WHERE status='done' AND cloud_ack=0 LIMIT 30"):
@@ -44,13 +50,39 @@ class DesktopSync:
             return {'device_id': device, 'seq': seq, 'snapshot': {'tasks': tasks,
                     'telegram_enabled': bool(app.token and app.chat_id),
                     'calendar_enabled': app.calendar is not None,'model_enabled':app.agent is not None,
-                    'model_status':app._get('model_status','not_configured')}, 'results': receipts,'dialogues':dialogues,
+                    'model_status':app._get('model_status','not_configured'),'shared_queue':shared_queue,'paused':app._get('paused',False)}, 'results': receipts,'dialogues':dialogues,
                     'context_after':app._get('shared_archive_seq',0)}
 
     def apply(self, action):
         app = self.app
         rid, task_id, kind = action.get('request_id'), action.get('task_id'), action.get('action')
         payload = action.get('payload')
+        if kind == 'shared_queue':
+            owner=app._get('queue_owner_id')
+            if not owner or not isinstance(payload,dict): raise ValueError('Owner pairing required')
+            digest=hashlib.sha256(json.dumps(action,sort_keys=True).encode()).hexdigest()
+            with app.lock:
+                prior=app.conn.execute('SELECT * FROM desktop_receipts WHERE request_id=?',(rid,)).fetchone()
+                if prior:
+                    if prior['content_hash']!=digest: raise ValueError('Receipt conflict')
+                    return prior['status']
+            try:
+                source=payload.get('source','control_room_web')
+                if source not in ('control_room_web','chatgpt'): raise ValueError('Invalid queue source')
+                principal={'owner':owner,'runtime':source,'scopes':['create','read','list','update']+(['approve'] if source=='control_room_web' else [])}
+                if payload.get('envelope'):
+                    principal=app.queue.authenticate(payload['envelope'],json.loads(os.getenv('KIKI_QUEUE_CREDENTIALS','{}')))
+                    if principal['owner']!=owner: raise ValueError('Owner mismatch')
+                    command=payload['envelope']['command']
+                else: command=payload['command']
+                if command['request_id']!=rid: raise ValueError('Request identity mismatch')
+                app.queue.dispatch(principal,command)
+                status='applied'
+            except (ValueError,KeyError,TypeError):
+                status='failed'
+            with app.lock,app.conn:
+                app.conn.execute('INSERT INTO desktop_receipts(request_id,content_hash,status) VALUES(?,?,?)',(rid,digest,status))
+            return status
         if kind=='chat':
             if app.agent:
                 app.agent.enqueue(rid,payload.get('text'),'web',payload)
@@ -89,6 +121,8 @@ class DesktopSync:
                 elif kind in ('complete', 'snooze', 'resume'):
                     if not row:
                         raise ValueError('Task no longer exists.')
+                    if row['queue_json']:
+                        raise ValueError('Use evidence-aware shared queue commands.')
                     if kind == 'complete':
                         app.conn.execute("UPDATE tasks SET status='done',done_at=COALESCE(done_at,?),snoozed_until=NULL WHERE sync_id=?", (now.isoformat(), task_id))
                     elif row['status'] != 'open':
@@ -121,7 +155,14 @@ class DesktopSync:
             self.app.agent.remember_shared(result['context'])
         if self.app.agent and 'archive' in result:
             self.app.agent.remember_archive(result['archive'])
+        if self.app.agent and 'work_session' in result:
+            self.app.agent.remember_work_session(result['work_session'])
         with self.app.lock, self.app.conn:
+            owner=result.get('owner_id')
+            if isinstance(owner,str) and owner:
+                prior=self.app._get('queue_owner_id')
+                if prior and prior!=owner: raise ValueError('Queue owner mapping changed')
+                self.app._set('queue_owner_id',owner)
             for rid in result.get('acknowledged', []):
                 self.app.conn.execute('UPDATE desktop_receipts SET acknowledged=1 WHERE request_id=?', (rid,))
                 if self.app.agent:
