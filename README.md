@@ -36,3 +36,7 @@ CI tests the local runtime on Windows and Linux, Python 3.10 and 3.12. These are
 ## Intended next milestone
 
 Build Kiki Browser Companion v0.1 as a private, locally installed Chrome side panel, backed by a durable, Kiki-initiated co-working session. Keep the existing local runtime, dashboard, and shared state as authorities. Prove that Kiki can greet, guide one real task, pause, and later resume it without requiring the owner to reconstruct the plan. Develop voice and browser-assisted email incrementally; sending remains disabled in the current prototype. See the [roadmap](docs/ROADMAP.md), [browser plan](docs/BROWSER_COMPANION_V01.md), [work-session contract](docs/WORK_SESSIONS.md), [email design](docs/EMAIL_ASSISTANT.md), and [shared context](docs/SHARED_CONTEXT.md).
+
+## AIRI laptop companion
+
+The laptop bridge connects AIRI 0.10.2 and local Ollama to the existing shared conversation ledger, with optional local screen understanding and paced proactive check-ins. It includes a shared work-session record, exact-reply delivery queue and pause controls. Start with [AIRI setup](docs/AIRI_SETUP.md), [implementation plan](docs/AIRI_IMPLEMENTATION_PLAN.md), and [adversarial review](docs/AIRI_GAN_REVIEW.md). Live laptop acceptance remains required.
